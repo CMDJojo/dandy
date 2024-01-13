@@ -1,0 +1,1 @@
+wasm-pack build . --out-dir ../public/web_bindings --target no-modules

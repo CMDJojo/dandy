@@ -1,0 +1,4 @@
+       a  b  c
+→ * s₀ s₁ s₀ s₂
+    s₁ s₂ s₁ s₁
+  * s₂ s₂ s₂ s₂
