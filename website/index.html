@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Dandy</title>
+    <meta charset="ISO-8859-1">
+    <style>
+        textarea {
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+Check equivalence of DFA here!
+<br>
+<label>
+    DFA 1:
+    <br>
+    <textarea id="dfa1" rows="10">
+       a  b  c
+→ * s₀ s₁ s₀ s₂
+    s₁ s₂ s₁ s₁
+  * s₂ s₂ s₂ s₂
+        </textarea>
+</label>
+<br>
+<label>
+    DFA 2:
+    <br>
+    <textarea id="dfa2" rows="10">
+    a b c
+→ * x z x y
+  * y y y y
+    z y a a
+    a y z a
+        </textarea>
+</label>
+<br>
+<button id="check">Check!</button>
+
+<script type="module">
+    import init, {check_eq} from './web_bindings/dandy_wasm.js';
+
+    async function run() {
+        await init();
+        document.getElementById("check").onclick = compare;
+    }
+
+    function compare() {
+        let dfa1 = document.getElementById("dfa1").value;
+        let dfa2 = document.getElementById("dfa2").value;
+        console.log(dfa1)
+        console.log(dfa2)
+        document.getElementById("check").innerText = check_eq(dfa1, dfa2);
+    }
+
+    run();
+</script>
+</body>
+</html>

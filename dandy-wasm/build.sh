@@ -1,1 +1,2 @@
-wasm-pack build . --out-dir ../public/web_bindings --target no-modules
+wasm-pack build . --out-dir ../web-build/web_bindings --target web
+cp -r ../website/* ../web-build
