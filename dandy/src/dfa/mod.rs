@@ -1,10 +1,10 @@
-use std::collections::{HashSet};
-use std::ops::Index;
 use crate::dfa::eval::DfaEvaluator;
 use crate::table::Table;
+use std::collections::HashSet;
+use std::ops::Index;
 
-pub mod parse;
 pub mod eval;
+pub mod parse;
 
 #[derive(Clone, Debug)]
 pub struct Dfa {
@@ -43,18 +43,19 @@ impl Dfa {
             name,
             initial,
             accepting,
-            transitions
-        } in &self.states {
+            transitions,
+        } in &self.states
+        {
             let initial = match (*initial, *accepting) {
                 (true, true) => "-> *",
                 (true, false) => "->",
                 (false, true) => "   *",
-                (false, false) => ""
+                (false, false) => "",
             };
             let mut state = vec![initial, name];
-            transitions.iter().for_each(
-                |&c| state.push(&self.states[c].name)
-            );
+            transitions
+                .iter()
+                .for_each(|&c| state.push(&self.states[c].name));
             table.push_row(state);
         }
         table.to_string(" ")
@@ -66,48 +67,37 @@ impl Dfa {
             return false;
         }
 
-        //alphabet mapping
-        //note: if we find all from 1st in 2nd it is the same due to uniqueness
-        let alphabet_map: Vec<_> = self.alphabet
-            .iter()
-            .filter_map(|c| other.alphabet.iter().position(|x| x == c))
-            .collect();
-
-        //if the map didn't manage to map all from self to other, they are different
-        if alphabet_map.len() != self.alphabet.len() {
+        let set1 = self.alphabet.iter().collect::<HashSet<_>>();
+        let set2 = other.alphabet.iter().collect::<HashSet<_>>();
+        if set1 != set2 {
             return false;
         }
 
         // initially, we explore the (pair of) initial states
-        let mut states_to_explore = vec![(
-            &self.states[self.initial_state],
-            &other.states[other.initial_state]
-        )];
+        let mut evaluators_to_explore = vec![(self.evaluator(), other.evaluator())];
         let mut explored_states = HashSet::new();
-        explored_states.insert((self.initial_state, other.initial_state));
+        explored_states.insert((
+            evaluators_to_explore[0].0.current_state_idx(),
+            evaluators_to_explore[0].1.current_state_idx(),
+        ));
 
-        while !states_to_explore.is_empty() {
+        while !evaluators_to_explore.is_empty() {
             // we explore states s1 and s2
-            let (s1, s2) = states_to_explore.pop().unwrap();
+            let (s1, s2) = evaluators_to_explore.pop().unwrap();
             // they must both be accepting or rejecting
-            if s1.accepting != s2.accepting {
+            if s1.is_accepting() != s2.is_accepting() {
                 return false;
             }
-            // for each char in alphabet, we get a pair of transitions
-            // note we need to map the alphabet
-            (0..self.alphabet.len()).for_each(|self_alph_idx| {
-                let other_alph_idx = alphabet_map[self_alph_idx];
-                let self_idx = s1.transitions[self_alph_idx];
-                let other_idx = s2.transitions[other_alph_idx];
-
-                if explored_states.insert((self_idx, other_idx)) {
-                    let pair = (
-                        &self.states[self_idx],
-                        &other.states[other_idx]
-                    );
-                    states_to_explore.push(pair);
+            // for each char in alphabet, we step the evaluator. If we get new states, explore them!
+            for elem in self.alphabet.iter() {
+                let mut d1 = s1.clone();
+                d1.step(elem);
+                let mut d2 = s2.clone();
+                d2.step(elem);
+                if explored_states.insert((d1.current_state_idx(), d2.current_state_idx())) {
+                    evaluators_to_explore.push((d1, d2));
                 }
-            });
+            }
         }
         return true;
     }

@@ -14,9 +14,7 @@ impl<'a> Table<'a> {
         self.row_len
             .iter_mut()
             .zip(&row)
-            .for_each(
-                |(mut max_len, s)| *max_len = max(*max_len, s.chars().count())
-            );
+            .for_each(|(mut max_len, s)| *max_len = max(*max_len, s.chars().count()));
         self.rows.push(row);
     }
 
@@ -30,14 +28,16 @@ impl<'a> Table<'a> {
                 s.to_string()
             }
         };
-        self.rows.iter().map(|row|
-            row.iter()
-                .zip(&self.row_len)
-                .map(
-                    |(s, l)|
-                        format!("{}{sep}", pad(s, *l))
-                ).collect::<Vec<_>>().join("")
-        ).collect::<Vec<_>>().join("\n")
+        self.rows
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .zip(&self.row_len)
+                    .map(|(s, l)| format!("{}{sep}", pad(s, *l)))
+                    .collect::<Vec<_>>()
+                    .join("")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
-

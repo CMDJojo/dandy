@@ -1,10 +1,11 @@
-use std::{iter, mem};
-use std::collections::HashSet;
+use crate::dfa::Dfa;
 use crate::nfa::eval::NfaEvaluator;
 use crate::table::Table;
+use std::collections::HashSet;
+use std::{iter, mem};
 
-pub mod parse;
 pub mod eval;
+pub mod parse;
 
 #[derive(Clone, Debug)]
 pub struct Nfa {
@@ -56,35 +57,107 @@ impl Nfa {
     pub fn to_table(&self) -> String {
         let mut table = Table::default();
 
-        let mut alph = vec!["", "", "ε"];
+        let mut alph = vec!["", "", "", "ε"];
         alph.extend(self.alphabet.iter().map(|s| s as &str));
         table.push_row(alph);
 
-        let trans_strings = &self.states.iter().map(
-            |state| {
+        let trans_strings = &self
+            .states
+            .iter()
+            .map(|state| {
                 iter::once(&state.epsilon_transitions)
                     .chain(&state.transitions)
                     .map(|trans| {
-                        let s = trans.iter()
+                        let s = trans
+                            .iter()
                             .map(|c| self.states[*c].name.clone())
-                            .collect::<Vec<_>>().join(" ");
+                            .collect::<Vec<_>>()
+                            .join(" ");
                         format!("{{{s}}}")
                     })
                     .collect::<Vec<_>>()
-            }
-        ).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
         for (idx, state) in self.states.iter().enumerate() {
-            let initial = match (state.initial, state.accepting) {
-                (true, true) => "-> *",
-                (true, false) => "->",
-                (false, true) => "   *",
-                (false, false) => ""
-            };
-            let mut state = vec![initial, &state.name];
+            let mut state = vec![
+                if state.initial { "->" } else { "" },
+                if state.accepting { "*" } else { "" },
+                &state.name,
+            ];
             state.extend(trans_strings[idx].iter().map(|s| s as &str));
             table.push_row(state);
         }
         table.to_string(" ")
+    }
+
+    pub fn equivalent_to(&self, other: &Nfa) -> bool {
+        //if the alphabets are different, they aren't equivalent
+        if self.alphabet.len() != other.alphabet.len() {
+            return false;
+        }
+
+        let set1 = self.alphabet.iter().collect::<HashSet<_>>();
+        let set2 = other.alphabet.iter().collect::<HashSet<_>>();
+        if set1 != set2 {
+            return false;
+        }
+
+        // initially, we explore the (pair of) initial states
+        let mut evaluators_to_explore = vec![(self.evaluator(), other.evaluator())];
+        let mut explored_states = HashSet::new();
+        explored_states.insert((
+            {
+                let mut vec = evaluators_to_explore[0]
+                    .0
+                    .current_states_idx()
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>();
+                vec.sort();
+                vec
+            },
+            {
+                let mut vec = evaluators_to_explore[0]
+                    .1
+                    .current_states_idx()
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>();
+                vec.sort();
+                vec
+            },
+        ));
+
+        while !evaluators_to_explore.is_empty() {
+            // we explore states s1 and s2
+            let (s1, s2) = evaluators_to_explore.pop().unwrap();
+            // they must both be accepting or rejecting
+            if s1.is_accepting() != s2.is_accepting() {
+                return false;
+            }
+            // for each char in alphabet, we step the evaluator. If we get new states, explore them!
+            for elem in self.alphabet.iter() {
+                let mut d1 = s1.clone();
+                d1.step(elem);
+                let mut d2 = s2.clone();
+                d2.step(elem);
+                if explored_states.insert((
+                    {
+                        let mut vec = d1.current_states_idx().iter().copied().collect::<Vec<_>>();
+                        vec.sort();
+                        vec
+                    },
+                    {
+                        let mut vec = d2.current_states_idx().iter().copied().collect::<Vec<_>>();
+                        vec.sort();
+                        vec
+                    },
+                )) {
+                    evaluators_to_explore.push((d1, d2));
+                }
+            }
+        }
+        return true;
     }
 }

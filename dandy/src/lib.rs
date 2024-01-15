@@ -1,6 +1,6 @@
 pub mod dfa;
-pub mod parser;
 pub mod nfa;
+pub mod parser;
 mod table;
 
 pub fn add(left: usize, right: usize) -> usize {

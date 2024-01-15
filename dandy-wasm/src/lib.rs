@@ -1,6 +1,6 @@
-use wasm_bindgen::prelude::wasm_bindgen;
-use dandy::dfa::Dfa;
 use dandy::dfa::parse::DfaParseError;
+use dandy::dfa::Dfa;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 pub fn check_eq(a: &str, b: &str) -> String {
@@ -14,7 +14,6 @@ pub fn check_eq(a: &str, b: &str) -> String {
         return format!("Error compiling 1: {}", err.to_string());
     }
     let dfa1: Dfa = dfa1.unwrap();
-
 
     let parse2 = dandy::parser::dfa(b);
     if let Err(err) = parse2 {
@@ -31,5 +30,5 @@ pub fn check_eq(a: &str, b: &str) -> String {
         "Equivalent".to_string()
     } else {
         "Not equivalent".to_string()
-    }
+    };
 }

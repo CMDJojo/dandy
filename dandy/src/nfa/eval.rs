@@ -1,7 +1,6 @@
+use crate::nfa::{Nfa, NfaState};
 use std::collections::{HashMap, HashSet};
 use std::{iter, mem};
-use crate::dfa::DfaState;
-use crate::nfa::{Nfa, NfaState};
 
 #[derive(Clone, Debug)]
 pub struct NfaEvaluator<'a> {
@@ -16,30 +15,39 @@ impl<'a> NfaEvaluator<'a> {
     }
 
     pub fn current_states(&self) -> Vec<&NfaState> {
-        self.current_states.iter().map(|&s| &self.nfa.states[s]).collect()
+        self.current_states
+            .iter()
+            .map(|&s| &self.nfa.states[s])
+            .collect()
+    }
+
+    pub fn current_states_idx(&self) -> &HashSet<usize> {
+        &self.current_states
     }
 
     pub fn step_all(&self) -> Vec<NfaEvaluator> {
-        iter::repeat(self.clone()).zip(&self.nfa.alphabet)
+        iter::repeat(self.clone())
+            .zip(&self.nfa.alphabet)
             .map(|(mut eval, elem)| {
                 eval.step(elem);
                 eval
-            }).collect()
+            })
+            .collect()
     }
 
     pub fn step(&mut self, elem: &str) -> Option<()> {
         let &idx = self.rev_map.get(elem)?;
-        self.current_states = self.current_states.iter().flat_map(
-            |&state| self.nfa.states[state].transitions[idx].clone()
-        ).collect();
+        self.current_states = self
+            .current_states
+            .iter()
+            .flat_map(|&state| self.nfa.states[state].transitions[idx].clone())
+            .collect();
         self.include_closure();
         Some(())
     }
 
     pub fn step_multiple(&mut self, elems: &[&str]) -> Option<()> {
-        elems.iter().try_for_each(
-            |e| self.step(e)
-        )
+        elems.iter().try_for_each(|e| self.step(e))
     }
 
     fn include_closure(&mut self) {
@@ -62,7 +70,12 @@ impl<'a> NfaEvaluator<'a> {
 
 impl<'a> From<&'a Nfa> for NfaEvaluator<'a> {
     fn from(value: &'a Nfa) -> Self {
-        let map = value.alphabet.iter().enumerate().map(|(idx, c)| (c as &str, idx)).collect();
+        let map = value
+            .alphabet
+            .iter()
+            .enumerate()
+            .map(|(idx, c)| (c as &str, idx))
+            .collect();
         let mut evaluator = Self {
             nfa: value,
             rev_map: map,

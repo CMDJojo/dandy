@@ -1,4 +1,5 @@
-       a  b  c
-→ * s₀ s₁ s₀ s₂
-    s₁ s₂ s₁ s₁
-  * s₂ s₂ s₂ s₂
+    a b c
+→ * x z x y
+  * y y y y
+    z y a a
+    a y z a

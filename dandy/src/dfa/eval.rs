@@ -1,6 +1,6 @@
+use crate::dfa::{Dfa, DfaState};
 use std::collections::HashMap;
 use std::iter;
-use crate::dfa::{Dfa, DfaState};
 
 #[derive(Debug, Clone)]
 pub struct DfaEvaluator<'a> {
@@ -17,12 +17,19 @@ impl<'a> DfaEvaluator<'a> {
     pub fn current_state(&self) -> &DfaState {
         &self.dfa.states[self.current_state]
     }
+
+    pub fn current_state_idx(&self) -> usize {
+        self.current_state
+    }
+
     pub fn step_all(&self) -> Vec<DfaEvaluator> {
-        iter::repeat(self.clone()).zip(&self.dfa.alphabet)
+        iter::repeat(self.clone())
+            .zip(&self.dfa.alphabet)
             .map(|(mut eval, elem)| {
                 eval.step(elem);
                 eval
-            }).collect()
+            })
+            .collect()
     }
     pub fn step(&mut self, elem: &str) -> Option<&DfaState> {
         let &idx = self.rev_map.get(elem)?;
@@ -31,16 +38,19 @@ impl<'a> DfaEvaluator<'a> {
     }
 
     pub fn step_multiple(&mut self, elems: &[&str]) -> Option<&DfaState> {
-        elems.iter().try_for_each(
-            |e| self.step(e).map(|_| ())
-        )?;
+        elems.iter().try_for_each(|e| self.step(e).map(|_| ()))?;
         Some(&self.dfa.states[self.current_state])
     }
 }
 
 impl<'a> From<&'a Dfa> for DfaEvaluator<'a> {
     fn from(value: &'a Dfa) -> Self {
-        let map = value.alphabet.iter().enumerate().map(|(idx, c)| (c as &str, idx)).collect();
+        let map = value
+            .alphabet
+            .iter()
+            .enumerate()
+            .map(|(idx, c)| (c as &str, idx))
+            .collect();
         Self {
             dfa: value,
             rev_map: map,
