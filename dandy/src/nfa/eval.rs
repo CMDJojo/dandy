@@ -1,6 +1,6 @@
 use crate::nfa::{Nfa, NfaState};
 use std::collections::{HashMap, HashSet};
-use std::{iter, mem};
+use std::iter;
 
 #[derive(Clone, Debug)]
 pub struct NfaEvaluator<'a> {

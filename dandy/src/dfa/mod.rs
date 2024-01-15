@@ -1,7 +1,6 @@
 use crate::dfa::eval::DfaEvaluator;
 use crate::table::Table;
 use std::collections::HashSet;
-use std::ops::Index;
 
 pub mod eval;
 pub mod parse;
@@ -79,9 +78,8 @@ impl Dfa {
             evaluators_to_explore[0].1.current_state_idx(),
         ));
 
-        while !evaluators_to_explore.is_empty() {
+        while let Some((s1, s2)) = evaluators_to_explore.pop() {
             // we explore states s1 and s2
-            let (s1, s2) = evaluators_to_explore.pop().unwrap();
             // they must both be accepting or rejecting
             if s1.is_accepting() != s2.is_accepting() {
                 return false;
@@ -97,6 +95,6 @@ impl Dfa {
                 }
             }
         }
-        return true;
+        true
     }
 }

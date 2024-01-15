@@ -1,4 +1,3 @@
-use crate::dfa::Dfa;
 use crate::nfa::eval::NfaEvaluator;
 use crate::table::Table;
 use std::collections::HashSet;
@@ -129,9 +128,8 @@ impl Nfa {
             },
         ));
 
-        while !evaluators_to_explore.is_empty() {
+        while let Some((s1, s2)) = evaluators_to_explore.pop() {
             // we explore states s1 and s2
-            let (s1, s2) = evaluators_to_explore.pop().unwrap();
             // they must both be accepting or rejecting
             if s1.is_accepting() != s2.is_accepting() {
                 return false;
@@ -158,6 +156,6 @@ impl Nfa {
                 }
             }
         }
-        return true;
+        true
     }
 }

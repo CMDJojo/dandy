@@ -14,7 +14,7 @@ impl<'a> Table<'a> {
         self.row_len
             .iter_mut()
             .zip(&row)
-            .for_each(|(mut max_len, s)| *max_len = max(*max_len, s.chars().count()));
+            .for_each(|(max_len, s)| *max_len = max(*max_len, s.chars().count()));
         self.rows.push(row);
     }
 

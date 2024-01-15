@@ -6,7 +6,7 @@ fn main() {
         let actual_dfa = dandy::dfa::Dfa::try_from(dfa);
         dbg!(&actual_dfa);
         if let Err(e) = actual_dfa {
-            println!("{}", e.to_string())
+            println!("{}", e)
         }
     }
 

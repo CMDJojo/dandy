@@ -53,7 +53,7 @@ fn nfa_head(input: &str) -> IResult<&str, Vec<NfaAlphabetEntry>> {
         separated_list1(
             space1,
             alt((
-                map(alphabet_elem, |s| NfaAlphabetEntry::Element(s)),
+                map(alphabet_elem, NfaAlphabetEntry::Element),
                 value(NfaAlphabetEntry::Eps, eps),
             )),
         ),
