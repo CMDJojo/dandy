@@ -1,15 +1,99 @@
 use nom::{
     IResult,
-    Parser,
     combinator::map,
     bytes::complete::tag,
     branch::alt,
+    bytes::complete::{take_till1},
+    character::complete::{line_ending, not_line_ending, space0, space1},
+    combinator::{opt, value, verify},
+    multi::{many0, many1, separated_list0, separated_list1},
+    sequence::{delimited, pair, preceded, terminated, tuple},
 };
-use nom::bytes::complete::{take_till1};
-use nom::character::complete::{line_ending, space0, space1};
-use nom::combinator::opt;
-use nom::multi::separated_list1;
-use nom::sequence::{delimited, pair, terminated, tuple};
+
+#[derive(Debug)]
+pub struct ParsedNfa<'a> {
+    pub head: Vec<NfaAlphabetEntry<'a>>,
+    pub states: Vec<ParsedNfaState<'a>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum NfaAlphabetEntry<'a> {
+    Element(&'a str),
+    Eps,
+}
+
+#[derive(Debug)]
+pub struct ParsedNfaState<'a> {
+    pub name: &'a str,
+    pub initial: bool,
+    pub accepting: bool,
+    pub transitions: Vec<Vec<&'a str>>,
+}
+
+pub fn nfa(input: &str) -> IResult<&str, ParsedNfa> {
+    map(
+        delimited(
+            many0(space_comment_line),
+            pair(
+                terminated(
+                    nfa_head,
+                    line_ending,
+                ),
+                preceded(
+                    many0(space_comment_line),
+                    separated_list1(
+                        many1(space_comment_line),
+                        nfa_line,
+                    ),
+                ),
+            ),
+            many0(space_comment_line),
+        ), |(head, states)|
+            ParsedNfa { head, states })
+        (input)
+}
+
+fn nfa_head(input: &str) -> IResult<&str, Vec<NfaAlphabetEntry>> {
+    delimited(
+        space0,
+        separated_list1(
+            space1,
+            alt((
+                map(alphabet_elem, |s| NfaAlphabetEntry::Element(s)),
+                value(NfaAlphabetEntry::Eps, eps)
+            )),
+        ),
+        space_comment,
+    )(input)
+}
+
+fn nfa_line(input: &str) -> IResult<&str, ParsedNfaState> {
+    map(
+        delimited(space0,
+                  tuple((
+                      opt(
+                          terminated(arrow, space1) // note: to be more lenient, change this and accepting to space0
+                      ),
+                      opt(
+                          terminated(accepting, space1)
+                      ),
+                      terminated(state_name, space1),
+                      separated_list1(
+                          space1,
+                          state_set,
+                      ),
+                  )),
+                  space_comment,
+        ),
+        |(initial, accepting, name, transitions)|
+            ParsedNfaState {
+                name,
+                initial: initial.is_some(),
+                accepting: accepting.is_some(),
+                transitions,
+            })(input)
+}
+
 
 #[derive(Debug)]
 pub struct ParsedDfa<'a> {
@@ -26,16 +110,24 @@ pub struct ParsedDfaState<'a> {
 }
 
 pub fn dfa(input: &str) -> IResult<&str, ParsedDfa> {
-    map(pair(
-        terminated(
-            dfa_head,
-            line_ending,
-        ),
-        separated_list1(
-            line_ending,
-            dfa_line,
-        ),
-    ), |(head, states)|
+    map(
+        delimited(
+            many0(space_comment_line),
+            pair(
+                terminated(
+                    dfa_head,
+                    line_ending,
+                ),
+                preceded(
+                    many0(space_comment_line),
+                    separated_list1(
+                        many1(space_comment_line),
+                        dfa_line,
+                    ),
+                ),
+            ),
+            many0(space_comment_line),
+        ), |(head, states)|
             ParsedDfa { head, states })
         (input)
 }
@@ -45,28 +137,31 @@ fn dfa_head(input: &str) -> IResult<&str, Vec<&str>> {
         space0,
         separated_list1(
             space1,
-            alphabet_char,
+            alphabet_elem,
         ),
-        space0,
+        space_comment,
     )(input)
 }
 
 fn dfa_line(input: &str) -> IResult<&str, ParsedDfaState> {
-    map(tuple((
-        space0,
-        opt(arrow),
-        space0,
-        opt(accepting),
-        space0,
-        state_name,
-        space1,
-        separated_list1(
-            space1,
-            state_name,
+    map(
+        delimited(space0,
+                  tuple((
+                      opt(
+                          terminated(arrow, space1) // note: to be more lenient, change this and accepting to space0
+                      ),
+                      opt(
+                          terminated(accepting, space1)
+                      ),
+                      terminated(state_name, space1),
+                      separated_list1(
+                          space1,
+                          state_name,
+                      ),
+                  )),
+                  space_comment,
         ),
-        space0
-    )),
-        |(_, initial, _, accepting, _, name, _, transitions, _)|
+        |(initial, accepting, name, transitions)|
             ParsedDfaState {
                 name,
                 initial: initial.is_some(),
@@ -75,12 +170,36 @@ fn dfa_line(input: &str) -> IResult<&str, ParsedDfaState> {
             })(input)
 }
 
-fn alphabet_char(input: &str) -> IResult<&str, &str> {
-    take_till1(|c| " \t\n,{}".contains(c))(input)
+fn eps(input: &str) -> IResult<&str, ()> {
+    map(alt((
+        tag("ε"),
+        tag("eps")
+    )), |_| ())(input)
+}
+
+fn alphabet_elem(input: &str) -> IResult<&str, &str> {
+    verify(
+        take_till1(|c: char| c.is_whitespace() || "#{}".contains(c)),
+        |elem| !["ε", "eps", "→", "->", "*"].contains(&elem))
+        (input)
+}
+
+fn state_set(input: &str) -> IResult<&str, Vec<&str>> {
+    delimited(
+        tag("{"),
+        separated_list0(
+            space1,
+            state_name,
+        ),
+        tag("}"),
+    )(input)
 }
 
 fn state_name(input: &str) -> IResult<&str, &str> {
-    take_till1(|c| " \t\n,{}".contains(c))(input)
+    verify(
+        take_till1(|c: char| c.is_whitespace() || "#{}".contains(c)),
+        |elem| !["ε", "eps", "→", "->", "*"].contains(&elem))
+        (input)
 }
 
 fn accepting(input: &str) -> IResult<&str, ()> {
@@ -95,4 +214,22 @@ fn arrow(input: &str) -> IResult<&str, ()> {
         tag("->"),
         tag("→")
     )), |_| ())(input)
+}
+
+fn space_comment_line(input: &str) -> IResult<&str, ()> {
+    terminated(space_comment, line_ending)(input)
+}
+
+fn space_comment(input: &str) -> IResult<&str, ()> {
+    value((), pair(
+        space0,
+        opt(comment),
+    ))(input)
+}
+
+fn comment(input: &str) -> IResult<&str, ()> {
+    value((), pair(
+        tag("#"),
+        not_line_ending,
+    ))(input)
 }
