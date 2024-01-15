@@ -1,8 +1,10 @@
-use std::iter;
-use std::ops::Index;
+use std::{iter, mem};
+use std::collections::HashSet;
+use crate::nfa::eval::NfaEvaluator;
 use crate::table::Table;
 
 pub mod parse;
+pub mod eval;
 
 #[derive(Clone, Debug)]
 pub struct Nfa {
@@ -21,6 +23,36 @@ pub struct NfaState {
 }
 
 impl Nfa {
+    pub fn accepts(&self, string: &[&str]) -> bool {
+        let mut eval = self.evaluator();
+        eval.step_multiple(string);
+        eval.is_accepting()
+    }
+
+    pub fn evaluator(&self) -> NfaEvaluator<'_> {
+        self.into()
+    }
+
+    pub fn closure(&self, start: usize) -> Option<HashSet<usize>> {
+        if start >= self.states.len() {
+            return None;
+        }
+        let mut all = HashSet::new();
+        all.insert(start);
+        let mut new = vec![start];
+        while !new.is_empty() {
+            let old_new = mem::take(&mut new);
+            for state in old_new {
+                for &eps_target in &self.states[state].epsilon_transitions {
+                    if all.insert(eps_target) {
+                        new.push(eps_target)
+                    }
+                }
+            }
+        }
+        Some(all)
+    }
+
     pub fn to_table(&self) -> String {
         let mut table = Table::default();
 

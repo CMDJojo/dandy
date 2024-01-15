@@ -1,8 +1,10 @@
 use std::collections::{HashSet};
 use std::ops::Index;
+use crate::dfa::eval::DfaEvaluator;
 use crate::table::Table;
 
 pub mod parse;
+pub mod eval;
 
 #[derive(Clone, Debug)]
 pub struct Dfa {
@@ -20,6 +22,16 @@ pub struct DfaState {
 }
 
 impl Dfa {
+    pub fn accepts(&self, string: &[&str]) -> bool {
+        let mut eval = self.evaluator();
+        eval.step_multiple(string);
+        eval.is_accepting()
+    }
+
+    pub fn evaluator(&self) -> DfaEvaluator<'_> {
+        self.into()
+    }
+
     pub fn to_table(&self) -> String {
         let mut table = Table::default();
 
