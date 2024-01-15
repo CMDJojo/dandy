@@ -1,5 +1,6 @@
 use std::collections::{HashSet};
 use std::ops::Index;
+use crate::table::Table;
 
 pub mod parse;
 
@@ -20,36 +21,11 @@ pub struct DfaState {
 
 impl Dfa {
     pub fn to_table(&self) -> String {
-        let widest_state =
-            self.states
-                .iter()
-                .map(|s| s.name.chars().count())
-                .max()
-                .unwrap_or_default();
+        let mut table = Table::default();
 
-        let widest_col =
-            self.alphabet.iter()
-                .map(|s| s.chars().count())
-                .max()
-                .unwrap_or_default()
-                .max(widest_state);
-
-        let pad = |s: &str, l: usize| {
-            let cs = s.chars().count();
-            if cs < l {
-                let amnt = l - cs;
-                format!("{}{}", s, &" ".repeat(amnt))
-            } else {
-                s.to_string()
-            }
-        };
-
-        let mut lines = Vec::with_capacity(self.states.len() + 1);
-        let alphabet = self.alphabet.iter().map(
-            |c| pad(c, widest_col)
-        ).collect::<Vec<_>>().join(" ");
-        //                        -> * A
-        lines.push(format!("     {} {alphabet}", " ".repeat(widest_state)));
+        let mut alph = vec!["", ""];
+        alph.extend(self.alphabet.iter().map(|s| s as &str));
+        table.push_row(alph);
 
         for DfaState {
             name,
@@ -57,15 +33,19 @@ impl Dfa {
             accepting,
             transitions
         } in &self.states {
-            let init = if *initial { "->" } else { "  " };
-            let accept = if *accepting { "*" } else { " " };
-            let name= pad(name, widest_state);
-            let trans = transitions.iter().map(
-                |&c| pad(&self.states[c].name, widest_col)
-            ).collect::<Vec<_>>().join(" ");
-            lines.push(format!("{init} {accept} {name} {trans}"));
+            let initial = match (*initial, *accepting) {
+                (true, true) => "-> *",
+                (true, false) => "->",
+                (false, true) => "   *",
+                (false, false) => ""
+            };
+            let mut state = vec![initial, name];
+            transitions.iter().for_each(
+                |&c| state.push(&self.states[c].name)
+            );
+            table.push_row(state);
         }
-        lines.join("\n")
+        table.to_string(" ")
     }
 
     pub fn equivalent_to(&self, other: &Dfa) -> bool {

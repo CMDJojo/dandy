@@ -28,4 +28,19 @@ fn main() {
     println!("{}", dfa1.equivalent_to(&dfa2));
 
     println!("{}", dfa2.to_table());
+
+
+    let nfa = dandy::parser::nfa(
+        include_str!("example.nfa")
+    ).unwrap().1;
+    let nfa: dandy::nfa::Nfa = nfa.try_into().unwrap();
+    let output = nfa.to_table();
+    println!("{output}");
+
+    let nfa = dandy::parser::nfa(
+        include_str!("example2.nfa")
+    ).unwrap().1;
+    let nfa: dandy::nfa::Nfa = nfa.try_into().unwrap();
+    let output = nfa.to_table();
+    println!("{output}");
 }

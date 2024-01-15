@@ -1,5 +1,7 @@
 pub mod dfa;
 pub mod parser;
+pub mod nfa;
+mod table;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

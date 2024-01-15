@@ -28,14 +28,9 @@ impl<'a> TryFrom<ParsedDfa<'a>> for Dfa {
 
         {
             let mut alphabet = HashSet::new();
-            let duplicate = head.iter().try_for_each(|c|
+            head.iter().try_for_each(|c|
                 alphabet.insert(c).then_some(()).ok_or(c)
-            );
-            if let Err(d) = duplicate {
-                return Err(
-                    DuplicateAlphabetSymbol(d)
-                );
-            }
+            ).map_err(|d| DuplicateAlphabetSymbol(d))?;
         }
 
         let state_name_map: HashMap<_, _> = states.iter().enumerate().map(|(i, s)| (s.name, i)).collect();
