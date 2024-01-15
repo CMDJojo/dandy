@@ -35,7 +35,7 @@ impl Dfa {
     pub fn to_table(&self) -> String {
         let mut table = Table::default();
 
-        let mut alph = vec!["", ""];
+        let mut alph = vec!["", "", ""];
         alph.extend(self.alphabet.iter().map(|s| s as &str));
         table.push_row(alph);
 
@@ -46,13 +46,11 @@ impl Dfa {
             transitions,
         } in &self.states
         {
-            let initial = match (*initial, *accepting) {
-                (true, true) => "-> *",
-                (true, false) => "->",
-                (false, true) => "   *",
-                (false, false) => "",
-            };
-            let mut state = vec![initial, name];
+            let mut state = vec![
+                if *initial { "->" } else { "" },
+                if *accepting { "*" } else { "" },
+                name,
+            ];
             transitions
                 .iter()
                 .for_each(|&c| state.push(&self.states[c].name));
