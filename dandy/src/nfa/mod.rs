@@ -8,18 +8,18 @@ pub mod parse;
 
 #[derive(Clone, Debug)]
 pub struct Nfa {
-    alphabet: Vec<String>,
-    states: Vec<NfaState>,
-    initial_state: usize,
+    pub(crate) alphabet: Vec<String>,
+    pub(crate) states: Vec<NfaState>,
+    pub(crate) initial_state: usize,
 }
 
 #[derive(Clone, Debug)]
 pub struct NfaState {
-    name: String,
-    initial: bool,
-    accepting: bool,
-    epsilon_transitions: Vec<usize>,
-    transitions: Vec<Vec<usize>>,
+    pub(crate) name: String,
+    pub(crate) initial: bool,
+    pub(crate) accepting: bool,
+    pub(crate) epsilon_transitions: Vec<usize>,
+    pub(crate) transitions: Vec<Vec<usize>>,
 }
 
 impl Nfa {

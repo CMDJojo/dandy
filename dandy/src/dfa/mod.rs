@@ -1,6 +1,7 @@
 use crate::dfa::eval::DfaEvaluator;
 use crate::table::Table;
 use std::collections::HashSet;
+use crate::nfa::{Nfa, NfaState};
 
 pub mod eval;
 pub mod parse;
@@ -20,7 +21,45 @@ pub struct DfaState {
     transitions: Vec<usize>,
 }
 
+impl From<DfaState> for NfaState {
+    fn from(value: DfaState) -> Self {
+        let DfaState {
+            name,
+            initial,
+            accepting,
+            transitions
+        } = value;
+        NfaState {
+            name,
+            initial,
+            accepting,
+            epsilon_transitions: vec![],
+            transitions: transitions.into_iter().map(|t| vec![t]).collect(),
+        }
+    }
+}
+
+impl From<Dfa> for Nfa {
+    fn from(value: Dfa) -> Self {
+        value.to_nfa()
+    }
+}
+
 impl Dfa {
+    pub fn to_nfa(self) -> Nfa {
+        let Dfa {
+            alphabet,
+            states,
+            initial_state
+        } = self;
+        let states = states.into_iter().map(|s| s.into()).collect();
+        Nfa {
+            alphabet,
+            states,
+            initial_state,
+        }
+    }
+
     pub fn accepts(&self, string: &[&str]) -> bool {
         let mut eval = self.evaluator();
         eval.step_multiple(string);

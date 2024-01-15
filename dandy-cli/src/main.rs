@@ -48,4 +48,7 @@ fn main() {
 
     println!("{}", dfa1.equivalent_to(&dfa2));
     println!("{}", nfa2.equivalent_to(&nfa3));
+
+    println!("{}", dfa2.to_table());
+    println!("{}", dfa2.to_nfa().to_table());
 }
