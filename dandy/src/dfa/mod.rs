@@ -80,6 +80,16 @@ impl Dfa {
 
     /// Generates a table of this DFA suitable for printing, which may be parsed again to this automaton
     pub fn to_table(&self) -> String {
+        self.gen_table("→")
+    }
+
+    /// Generates a table of this DFA suitable for printing, which may be parsed again to this automaton. The arrow for
+    /// the initial state is "->"
+    pub fn ascii_table(&self) -> String {
+        self.gen_table("->")
+    }
+
+    fn gen_table(&self, arrow: &str) -> String {
         let mut table = Table::default();
 
         let mut alph = vec!["", "", ""];
@@ -94,7 +104,7 @@ impl Dfa {
         } in &self.states
         {
             let mut state = vec![
-                if *initial { "->" } else { "" },
+                if *initial { arrow } else { "" },
                 if *accepting { "*" } else { "" },
                 name,
             ];

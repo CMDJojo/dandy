@@ -135,9 +135,19 @@ impl Nfa {
 
     /// Generates a table of this NFA suitable for printing, which may be parsed again to this automaton
     pub fn to_table(&self) -> String {
+        self.gen_table("ε", "→")
+    }
+
+    /// Generates a table of this NFA suitable for printing, which may be parsed again to this automaton. The epsilon
+    /// character is represented "eps" and the arrow for the initial state is "->"
+    pub fn ascii_table(&self) -> String {
+        self.gen_table("eps", "->")
+    }
+
+    fn gen_table(&self, eps: &str, arrow: &str) -> String {
         let mut table = Table::default();
 
-        let mut alph = vec!["", "", "", "ε"];
+        let mut alph = vec!["", "", "", eps];
         alph.extend(self.alphabet.iter().map(|s| s as &str));
         table.push_row(alph);
 
@@ -161,7 +171,7 @@ impl Nfa {
 
         for (idx, state) in self.states.iter().enumerate() {
             let mut state = vec![
-                if state.initial { "->" } else { "" },
+                if state.initial { arrow } else { "" },
                 if state.accepting { "*" } else { "" },
                 &state.name,
             ];
