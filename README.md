@@ -4,6 +4,9 @@ Dandy is a Rust library for some operations on DFAs, NFAs with an
 accompanied CLI and website. It incorporates a format for denoting
 DFAs and NFAs as well. This repo is very much work in progress.
 
+The [library](dandy) is published to [crates.io](https://crates.io/crates/dandy)
+and contains a more detailed readme.
+
 ## How to use
 
 The CLI isn't done yet, but the `dandy-cli` folder is what is going
