@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 dandy = { path = "../dandy", version = "*" }
+clap = "4.4.17"
