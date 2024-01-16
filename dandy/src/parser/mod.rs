@@ -1,5 +1,17 @@
-use nom::{branch::alt, bytes::complete::tag, bytes::complete::take_till1, character::complete::{line_ending, not_line_ending, space0, space1}, combinator::map, combinator::{opt, value, verify}, multi::{many0, many1, separated_list0, separated_list1}, sequence::{delimited, pair, preceded, terminated, tuple}, IResult, Finish};
-use nom::error::Error;
+use nom::{
+    branch::alt,
+    bytes::complete::tag,
+    bytes::complete::take_till1,
+    character::complete::{line_ending, not_line_ending, space0, space1},
+    combinator::map,
+    combinator::{opt, value, verify},
+    multi::{many0, many1, separated_list0, separated_list1},
+    sequence::{delimited, pair, preceded, terminated, tuple},
+    IResult,
+    Finish,
+    combinator::{all_consuming, eof, recognize},
+    error::Error,
+};
 
 #[derive(Debug)]
 pub struct ParsedNfa<'a> {
@@ -22,7 +34,7 @@ pub struct ParsedNfaState<'a> {
 }
 
 pub fn nfa(input: &str) -> Result<ParsedNfa, Error<&str>> {
-    full_nfa(input).finish().map(|(_, nfa)| nfa)
+    all_consuming(full_nfa)(input).finish().map(|(_, nfa)| nfa)
 }
 
 pub fn full_nfa(input: &str) -> IResult<&str, ParsedNfa> {
@@ -94,7 +106,7 @@ pub struct ParsedDfaState<'a> {
 }
 
 pub fn dfa(input: &str) -> Result<ParsedDfa, Error<&str>> {
-    full_dfa(input).finish().map(|(_, dfa)| dfa)
+    all_consuming(full_dfa)(input).finish().map(|(_, dfa)| dfa)
 }
 
 pub fn full_dfa(input: &str) -> IResult<&str, ParsedDfa> {
@@ -176,7 +188,20 @@ fn arrow(input: &str) -> IResult<&str, ()> {
 }
 
 fn space_comment_line(input: &str) -> IResult<&str, ()> {
-    terminated(space_comment, line_ending)(input)
+    // We need to allow a space-only or comment-only line to end with either
+    // a line ending or eof, but we need to consume *something* otherwise
+    // many0(space_comment_line) will be in an endless loop at eof
+    value((),
+          verify(
+              recognize(
+                  terminated(
+                      space_comment,
+                      alt((line_ending, eof)),
+                  )
+              ),
+              |consumed: &str| !consumed.is_empty(),
+          ),
+    )(input)
 }
 
 fn space_comment(input: &str) -> IResult<&str, ()> {
