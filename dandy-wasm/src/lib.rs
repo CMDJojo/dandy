@@ -8,7 +8,7 @@ pub fn check_eq(a: &str, b: &str) -> String {
     if let Err(err) = parse1 {
         return format!("Error parsing 1: {}", err);
     }
-    let p_dfa1 = parse1.unwrap().1;
+    let p_dfa1 = parse1.unwrap();
     let dfa1: Result<Dfa, DfaParseError> = p_dfa1.try_into();
     if let Err(err) = dfa1 {
         return format!("Error compiling 1: {}", err);
@@ -19,7 +19,7 @@ pub fn check_eq(a: &str, b: &str) -> String {
     if let Err(err) = parse2 {
         return format!("Error parsing 2: {}", err);
     }
-    let p_dfa2 = parse2.unwrap().1;
+    let p_dfa2 = parse2.unwrap();
     let dfa2: Result<Dfa, DfaParseError> = p_dfa2.try_into();
     if let Err(err) = dfa2 {
         return format!("Error compiling 2: {}", err);

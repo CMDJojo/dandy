@@ -40,7 +40,8 @@ impl<'a> NfaEvaluator<'a> {
         self.current_states = self
             .current_states
             .iter()
-            .flat_map(|&state| self.nfa.states[state].transitions[idx].clone())
+            .flat_map(|&state| &self.nfa.states[state].transitions[idx])
+            .copied()
             .collect();
         self.include_closure();
         Some(())

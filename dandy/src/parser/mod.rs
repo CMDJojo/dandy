@@ -1,14 +1,5 @@
-use nom::{
-    branch::alt,
-    bytes::complete::tag,
-    bytes::complete::take_till1,
-    character::complete::{line_ending, not_line_ending, space0, space1},
-    combinator::map,
-    combinator::{opt, value, verify},
-    multi::{many0, many1, separated_list0, separated_list1},
-    sequence::{delimited, pair, preceded, terminated, tuple},
-    IResult,
-};
+use nom::{branch::alt, bytes::complete::tag, bytes::complete::take_till1, character::complete::{line_ending, not_line_ending, space0, space1}, combinator::map, combinator::{opt, value, verify}, multi::{many0, many1, separated_list0, separated_list1}, sequence::{delimited, pair, preceded, terminated, tuple}, IResult, Finish};
+use nom::error::Error;
 
 #[derive(Debug)]
 pub struct ParsedNfa<'a> {
@@ -30,7 +21,11 @@ pub struct ParsedNfaState<'a> {
     pub transitions: Vec<Vec<&'a str>>,
 }
 
-pub fn nfa(input: &str) -> IResult<&str, ParsedNfa> {
+pub fn nfa(input: &str) -> Result<ParsedNfa, Error<&str>> {
+    full_nfa(input).finish().map(|(_, nfa)| nfa)
+}
+
+pub fn full_nfa(input: &str) -> IResult<&str, ParsedNfa> {
     map(
         delimited(
             many0(space_comment_line),
@@ -98,7 +93,11 @@ pub struct ParsedDfaState<'a> {
     pub transitions: Vec<&'a str>,
 }
 
-pub fn dfa(input: &str) -> IResult<&str, ParsedDfa> {
+pub fn dfa(input: &str) -> Result<ParsedDfa, Error<&str>> {
+    full_dfa(input).finish().map(|(_, dfa)| dfa)
+}
+
+pub fn full_dfa(input: &str) -> IResult<&str, ParsedDfa> {
     map(
         delimited(
             many0(space_comment_line),
@@ -169,7 +168,7 @@ fn state_name(input: &str) -> IResult<&str, &str> {
 }
 
 fn accepting(input: &str) -> IResult<&str, ()> {
-    map(tag("*"), |_| ())(input)
+    value((), tag("*"))(input)
 }
 
 fn arrow(input: &str) -> IResult<&str, ()> {
