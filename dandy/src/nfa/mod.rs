@@ -7,7 +7,7 @@ use std::{iter, mem};
 pub mod eval;
 pub mod parse;
 
-/// A non-determenistic finite automata, denoted by its alphabet, states and the initial state
+/// A non-deterministic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug)]
 pub struct Nfa {
     pub(crate) alphabet: Vec<String>,

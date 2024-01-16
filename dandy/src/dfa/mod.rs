@@ -6,7 +6,7 @@ use std::collections::HashSet;
 pub mod eval;
 pub mod parse;
 
-/// A determenistic finite automata, denoted by its alphabet, states and the initial state
+/// A deterministic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug)]
 pub struct Dfa {
     pub(crate) alphabet: Vec<String>,
@@ -50,7 +50,8 @@ impl From<Dfa> for Nfa {
 
 impl Dfa {
     /// Converts this DFA to a NFA by simply converting each state to a NFA state. All state names
-    /// are kept
+    /// are kept. This is a cheap operation, involving no clones but some vector allocations due to
+    /// the vectors required by NFA.
     pub fn to_nfa(self) -> Nfa {
         let Dfa {
             alphabet,
