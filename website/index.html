@@ -15,62 +15,186 @@ Check equivalence of DFA here!
 <label>
     DFA 1:
     <br>
-    <textarea id="dfa1" rows="10">
+    <textarea id="dfa-eq-dfa1" rows="10">
        a  b  c
 → * s₀ s₁ s₀ s₂
     s₁ s₂ s₁ s₁
   * s₂ s₂ s₂ s₂
-        </textarea>
+    </textarea>
 </label>
 <br>
 <label>
     DFA 2:
     <br>
-    <textarea id="dfa2" rows="10">
+    <textarea id="dfa-eq-dfa2" rows="10">
     a b c
 → * x z x y
   * y y y y
     z y a a
     a y z a
-        </textarea>
+    </textarea>
 </label>
 <br>
-<button id="check">Check!</button>
+<button id="dfa-eq-check">Check!</button>
 <br>
-<span id="errors"></span>
+<span id="dfa-eq-errors"></span>
+
+<br>
+<br>
+
+Check equivalence of NFA here!
+<br>
+<label>
+    NFA 1:
+    <br>
+    <textarea id="nfa-eq-nfa1" rows="10">
+     a    b    c
+→ s₀ {s₀} {s₁} {s₀ s₂}
+  s₁ {}   {s₃} {s₂}
+  s₂ {}   {s₁} {s₄}
+  s₃ {s₄} {}   {s₃}
+* s₄ {}   {s₄} {}
+     </textarea>
+</label>
+<br>
+<label>
+    NFA 2:
+    <br>
+    <textarea id="nfa-eq-nfa2" rows="10">
+     ε    a       b
+→ s₀ {}   {s₁}    {s₀ s₂}
+  s₁ {s₂} {s₄}    {s₃}
+  s₂ {}   {s₁ s₄} {s₃}
+  s₃ {s₅} {s₄ s₅} {}
+  s₄ {s₃} {}      {s₅}
+* s₅ {}   {s₅}    {s₅}
+    </textarea>
+</label>
+<br>
+<button id="nfa-eq-check">Check!</button>
+<br>
+<span id="nfa-eq-errors"></span>
+
+<br>
+<br>
+
+Convert NFA to DFA here!
+<br>
+
+<label>
+    NFA:
+    <br>
+    <textarea id="nfa-to-dfa" rows="10">
+     ε    a       b
+→ s₀ {}   {s₁}    {s₀ s₂}
+  s₁ {s₂} {s₄}    {s₃}
+  s₂ {}   {s₁ s₄} {s₃}
+  s₃ {s₅} {s₄ s₅} {}
+  s₄ {s₃} {}      {s₅}
+* s₅ {}   {s₅}    {s₅}
+    </textarea>
+</label>
+<br>
+<button id="nfa-to-dfa-btn">Convert!</button>
+<br>
+<label>
+    Result:
+    <br>
+    <textarea id="nfa-to-dfa-out" rows="10" readonly>
+Convert an NFA and
+the DFA will appear here
+    </textarea>
+</label>
 
 <script type="module">
-    import init, {load_dfa, check_dfa_eq} from './web_bindings/dandy_wasm.js';
+    import init, {
+        load_dfa,
+        check_dfa_eq,
+        delete_dfa,
+        dfa_to_nfa,
+        dfa_to_table,
+        load_nfa,
+        check_nfa_eq,
+        delete_nfa,
+        nfa_to_dfa,
+        nfa_to_table
+    } from './web_bindings/dandy_wasm.js';
 
     async function run() {
         await init();
-        document.getElementById("check").onclick = compare;
+        document.getElementById("dfa-eq-check").onclick = checkDfaEq;
+        document.getElementById("nfa-eq-check").onclick = checkNfaEq;
+        document.getElementById("nfa-to-dfa-btn").onclick = nfaToDfa
     }
 
-    function compare() {
+    function checkDfaEq() {
         let errors = "";
         let dfa1 = 0, dfa2 = 0;
 
         try {
-            dfa1 = load_dfa(document.getElementById("dfa1").value);
+            dfa1 = load_dfa(document.getElementById("dfa-eq-dfa1").value);
         } catch (e) {
             errors += "Error parsing DFA 1: " + e + "\n";
         }
 
         try {
-            dfa2 = load_dfa(document.getElementById("dfa2").value);
+            dfa2 = load_dfa(document.getElementById("dfa-eq-dfa2").value);
         } catch (e) {
             errors += "Error parsing DFA 2: " + e + "\n";
         }
 
         if (errors === "") {
             let equal = check_dfa_eq(dfa1, dfa2);
-            document.getElementById("check").innerText = equal ? "Equivalent" : "Not equivalent";
+            document.getElementById("dfa-eq-check").innerText = equal ? "Equivalent" : "Not equivalent";
+            delete_dfa(dfa1);
+            delete_dfa(dfa2);
         } else {
-            document.getElementById("check").innerText = "Fix errors first!";
+            document.getElementById("dfa-eq-check").innerText = "Fix errors first!";
         }
 
-        document.getElementById("errors").innerText = errors;
+        document.getElementById("dfa-eq-errors").innerText = errors;
+    }
+
+    function checkNfaEq() {
+        let errors = "";
+        let nfa1 = 0, nfa2 = 0;
+
+        try {
+            nfa1 = load_nfa(document.getElementById("nfa-eq-nfa1").value);
+        } catch (e) {
+            errors += "Error parsing NFA 1: " + e + "\n";
+        }
+
+        try {
+            nfa2 = load_nfa(document.getElementById("nfa-eq-nfa2").value);
+        } catch (e) {
+            errors += "Error parsing NFA 2: " + e + "\n";
+        }
+
+        if (errors === "") {
+            let equal = check_nfa_eq(nfa1, nfa2);
+            document.getElementById("nfa-eq-check").innerText = equal ? "Equivalent" : "Not equivalent";
+            delete_nfa(nfa1);
+            delete_nfa(nfa2);
+        } else {
+            document.getElementById("nfa-eq-check").innerText = "Fix errors first!";
+        }
+
+        document.getElementById("nfa-eq-errors").innerText = errors;
+    }
+
+    function nfaToDfa() {
+        let nfa = 0;
+        try {
+            nfa = load_nfa(document.getElementById("nfa-to-dfa").value);
+        } catch (e) {
+            document.getElementById("nfa-to-dfa-out").value = e;
+            return;
+        }
+        let dfa = nfa_to_dfa(nfa);
+        document.getElementById("nfa-to-dfa-out").value = dfa_to_table(dfa).replace("\n", "\r\n");
+        delete_nfa(nfa);
+        delete_dfa(dfa);
     }
 
     run();
