@@ -20,7 +20,7 @@
 #  * {s3 s4 s5}        {s3 s4 s5}         {s5}
 #  * {s5}              {s5}               {s5}
 
-# renamed states:
+# renamed states: (see eq_to_nfa1.dfa)
 #       a b
 # -> a  b c
 #    b  d e

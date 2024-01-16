@@ -7,6 +7,7 @@ use std::{iter, mem};
 pub mod eval;
 pub mod parse;
 
+/// A non-determenistic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug)]
 pub struct Nfa {
     pub(crate) alphabet: Vec<String>,
@@ -14,6 +15,8 @@ pub struct Nfa {
     pub(crate) initial_state: usize,
 }
 
+/// A state in a NFA automata, which consists of its name, if it is the initial state or not, if it is accepting
+/// or not, any amount of epsilon transitions and any amount of transitions for each element in alphabet
 #[derive(Clone, Debug)]
 pub struct NfaState {
     pub(crate) name: String,
@@ -24,20 +27,36 @@ pub struct NfaState {
 }
 
 impl Nfa {
+    /// Converts this NFA to a DFA using the powerset construction.
+    /// Note that this is a somewhat expensive operation. The names of
+    /// the states in the resulting DFA are non-deterministic, named
+    /// sequentially from 0. The state named 0 is guaranteed to be the
+    /// initial state
     pub fn to_dfa(&self) -> Dfa {
+        // Generator to generate sequential numbers to new states
         let mut gen = 0usize..;
-        let mut map = HashMap::new(); // mapping vec names to numbers
+        // Mapping set of old states to new sequential number
+        let mut map = HashMap::new();
+        // Set of sequential numbers which are accepting states
         let mut accepting = HashSet::new();
+        // Evaluators to explore
         let mut to_explore = vec![self.evaluator()];
+        // Transition tables for new states, indexed by sets
         let mut transitions = HashMap::new();
-        let key = Self::set_to_vec(to_explore[0].current_states_idx());
-        let n = gen.next().unwrap();
-        map.insert(key, n);
-        if to_explore[0].is_accepting() {
-            accepting.insert(n);
+
+        {
+            // Pre-work, add init to tables
+            let key = Self::set_to_vec(to_explore[0].current_states_idx());
+            let n = gen.next().unwrap(); // 0
+            map.insert(key, n);
+            if to_explore[0].is_accepting() {
+                accepting.insert(n);
+            }
         }
 
+        // While we have non-expanded states
         while let Some(eval) = to_explore.pop() {
+            // Keep track of transitions from this state
             let mut tr = Vec::with_capacity(self.alphabet.len());
             for new_evaluator in eval.step_all() {
                 let is_accepting = new_evaluator.is_accepting();
@@ -61,6 +80,8 @@ impl Nfa {
             vec
         };
 
+        // We sort the keys to have a nice table later on. This may be wasteful but
+        // Self::set_to_vec sorts and converts sets to vecs anyways so nevermind
         let states = sorted_keys
             .into_iter()
             .map(|(key, &n)| DfaState {
@@ -72,22 +93,26 @@ impl Nfa {
             .collect();
 
         Dfa {
-            alphabet: self.alphabet.clone(),
+            alphabet: self.alphabet.clone(), // Prob only clone we can avoid if we take borrow
             states,
-            initial_state: 0,
+            initial_state: 0, // We start at initial state and assign 0 from gen, so initial is 0
         }
     }
 
+    /// Checks if this automaton accepts the given string. This is equivalent to getting the
+    /// evaluator, stepping it multiple times and checking if it is accepting
     pub fn accepts(&self, string: &[&str]) -> bool {
         let mut eval = self.evaluator();
         eval.step_multiple(string);
         eval.is_accepting()
     }
 
+    /// Gets an evaluator, which is a struct that is used to evaluate strings with the automaton
     pub fn evaluator(&self) -> NfaEvaluator<'_> {
         self.into()
     }
 
+    /// Gives the epsilon closure of a state, given the state index
     pub fn closure(&self, start: usize) -> Option<HashSet<usize>> {
         if start >= self.states.len() {
             return None;
@@ -108,6 +133,7 @@ impl Nfa {
         Some(all)
     }
 
+    /// Generates a table of this NFA suitable for printing, which may be parsed again to this automaton
     pub fn to_table(&self) -> String {
         let mut table = Table::default();
 
@@ -145,6 +171,9 @@ impl Nfa {
         table.to_string(" ")
     }
 
+    /// Checks if this NFA is equivalent to another NFA, that is, if they accept the same language.
+    /// If the automatons have different alphabets they are never equivalent, but the order of the alphabet,
+    /// the number of states and the transitions doesn't matter.
     pub fn equivalent_to(&self, other: &Nfa) -> bool {
         //if the alphabets are different, they aren't equivalent
         if self.alphabet.len() != other.alphabet.len() {
@@ -188,8 +217,9 @@ impl Nfa {
         true
     }
 
-    fn set_to_vec(set: &HashSet<usize>) -> Vec<usize> {
-        let mut vec = set.iter().copied().collect::<Vec<_>>();
+    /// Converts a HashSet (which is not hashable) to a Vec (which is hashable) in a determenistic way
+    fn set_to_vec<T: Clone + Ord>(set: &HashSet<T>) -> Vec<T> {
+        let mut vec = set.iter().cloned().collect::<Vec<_>>();
         vec.sort();
         vec
     }

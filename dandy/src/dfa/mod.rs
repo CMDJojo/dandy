@@ -6,6 +6,7 @@ use std::collections::HashSet;
 pub mod eval;
 pub mod parse;
 
+/// A determenistic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug)]
 pub struct Dfa {
     pub(crate) alphabet: Vec<String>,
@@ -13,6 +14,8 @@ pub struct Dfa {
     pub(crate) initial_state: usize,
 }
 
+/// A state in a DFA automata, which consists of its name, if it is the initial state or not, if it is accepting
+/// or not, and the transition for each element of the alphabet
 #[derive(Clone, Debug)]
 pub struct DfaState {
     pub(crate) name: String,
@@ -46,6 +49,8 @@ impl From<Dfa> for Nfa {
 }
 
 impl Dfa {
+    /// Converts this DFA to a NFA by simply converting each state to a NFA state. All state names
+    /// are kept
     pub fn to_nfa(self) -> Nfa {
         let Dfa {
             alphabet,
@@ -60,16 +65,20 @@ impl Dfa {
         }
     }
 
+    /// Checks if this automaton accepts the given string. This is equivalent to getting the
+    /// evaluator, stepping it multiple times and checking if it is accepting
     pub fn accepts(&self, string: &[&str]) -> bool {
         let mut eval = self.evaluator();
         eval.step_multiple(string);
         eval.is_accepting()
     }
 
+    /// Gets an evaluator, which is a struct that is used to evaluate strings with the automaton
     pub fn evaluator(&self) -> DfaEvaluator<'_> {
         self.into()
     }
 
+    /// Generates a table of this DFA suitable for printing, which may be parsed again to this automaton
     pub fn to_table(&self) -> String {
         let mut table = Table::default();
 
@@ -97,6 +106,9 @@ impl Dfa {
         table.to_string(" ")
     }
 
+    /// Checks if this DFA is equivalent to another DFA, that is, if they accept the same language.
+    /// If the automatons have different alphabets they are never equivalent, but the order of the alphabet,
+    /// the number of states and the transitions doesn't matter.
     pub fn equivalent_to(&self, other: &Dfa) -> bool {
         //if the alphabets are different, they aren't equivalent
         if self.alphabet.len() != other.alphabet.len() {
