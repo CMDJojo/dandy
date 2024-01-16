@@ -1,3 +1,29 @@
+use dandy::dfa::Dfa;
+
+fn main1() {
+    let raw_dfa = "
+           a  b  c
+    → * s₀ s₁ s₀ s₂
+        s₁ s₂ s₁ s₁
+      * s₂ s₂ s₂ s₂
+    ";
+    let parsed_dfa = dandy::parser::dfa(raw_dfa).unwrap();
+    let dfa: Dfa = parsed_dfa.try_into().unwrap();
+    assert!(dfa.accepts(&vec!["a", "b", "c", "c", "a"]));
+    assert!(dfa.accepts(&vec!["c", "b", "a"]));
+    assert!(!dfa.accepts(&vec!["a", "b", "b", "c"]));
+
+    let equivalent_dfa = "
+        a b c
+    → * x z x y
+      * y y y y
+        z y w z
+        w y z w
+    ";
+    let dfa2 = dandy::parser::dfa(equivalent_dfa).unwrap().try_into().unwrap();
+    assert!(dfa.equivalent_to(&dfa2));
+}
+
 fn main() {
     println!("Hello, world!");
     let dfa = dandy::parser::dfa(include_str!("example.dfa"));

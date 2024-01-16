@@ -2,8 +2,10 @@
 name = "dandy"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+description = "Implementation of DFAs and NFAs together with a file format"
+readme = "README.md"
+repository = "https://github.com/cmdjojo/dandy/"
 
 [dependencies]
 nom = "7.1.3"
