@@ -36,9 +36,11 @@ Check equivalence of DFA here!
 </label>
 <br>
 <button id="check">Check!</button>
+<br>
+<span id="errors"></span>
 
 <script type="module">
-    import init, {check_eq} from './web_bindings/dandy_wasm.js';
+    import init, {load_dfa, check_dfa_eq} from './web_bindings/dandy_wasm.js';
 
     async function run() {
         await init();
@@ -46,11 +48,29 @@ Check equivalence of DFA here!
     }
 
     function compare() {
-        let dfa1 = document.getElementById("dfa1").value;
-        let dfa2 = document.getElementById("dfa2").value;
-        console.log(dfa1)
-        console.log(dfa2)
-        document.getElementById("check").innerText = check_eq(dfa1, dfa2);
+        let errors = "";
+        let dfa1 = 0, dfa2 = 0;
+
+        try {
+            dfa1 = load_dfa(document.getElementById("dfa1").value);
+        } catch (e) {
+            errors += "Error parsing DFA 1: " + e + "\n";
+        }
+
+        try {
+            dfa2 = load_dfa(document.getElementById("dfa2").value);
+        } catch (e) {
+            errors += "Error parsing DFA 2: " + e + "\n";
+        }
+
+        if (errors === "") {
+            let equal = check_dfa_eq(dfa1, dfa2);
+            document.getElementById("check").innerText = equal ? "Equivalent" : "Not equivalent";
+        } else {
+            document.getElementById("check").innerText = "Fix errors first!";
+        }
+
+        document.getElementById("errors").innerText = errors;
     }
 
     run();
