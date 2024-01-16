@@ -3,3 +3,4 @@ Cargo.lock
 web-build
 website/web_bindings
 .idea
+.DS_Store
