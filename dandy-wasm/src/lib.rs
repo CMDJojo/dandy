@@ -1,3 +1,22 @@
+//! Wasm bindings for the dandy library. These bindings can be imported and accessed via JavaScript. The DFAs/NFAs are
+//! not exposed to JavaScript, rather when loading them using load_dfa() and load_nfa() (which parses its input and
+//! generates an DFA/NFA respectively), the DFA or NFA is stored in the wasm runtime, and an unique key is returned
+//! which is used to reference the DFA/NFA later on. The DFA/NFA is kept loaded until delete_dfa()/delete_dfa() is
+//! called. Example usage:
+//! ```js
+//! import init, { load_nfa, nfa_to_dfa, delete_nfa, dfa_to_table, delete_dfa } from './web_bindings/dandy_wasm.js';
+//! function convert() {
+//!     // make sure to call init() first!
+//!     let input = document.getElementById("input");
+//!     let nfa = load_nfa(input); // can be surrounded by try/catch to catch parsing errors
+//!     let dfa = nfa_to_dfa(nfa);
+//!     let table = dfa_to_table(dfa);
+//!     delete_nfa(nfa);
+//!     delete_dfa(dfa);
+//!     return table;
+//! }
+//! ```
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::RangeFrom;
