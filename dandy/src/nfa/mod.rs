@@ -1,6 +1,7 @@
+use crate::dfa::{Dfa, DfaState};
 use crate::nfa::eval::NfaEvaluator;
 use crate::table::Table;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::{iter, mem};
 
 pub mod eval;
@@ -23,6 +24,60 @@ pub struct NfaState {
 }
 
 impl Nfa {
+    pub fn to_dfa(&self) -> Dfa {
+        let mut gen = 0usize..;
+        let mut map = HashMap::new(); // mapping vec names to numbers
+        let mut accepting = HashSet::new();
+        let mut to_explore = vec![self.evaluator()];
+        let mut transitions = HashMap::new();
+        let key = Self::set_to_vec(to_explore[0].current_states_idx());
+        let n = gen.next().unwrap();
+        map.insert(key, n);
+        if to_explore[0].is_accepting() {
+            accepting.insert(n);
+        }
+
+        while let Some(eval) = to_explore.pop() {
+            let mut tr = Vec::with_capacity(self.alphabet.len());
+            for new_evaluator in eval.step_all() {
+                let is_accepting = new_evaluator.is_accepting();
+                let key = Self::set_to_vec(new_evaluator.current_states_idx());
+                if !map.contains_key(&key) {
+                    to_explore.push(new_evaluator);
+                }
+                let x = map.entry(key).or_insert_with(|| gen.next().unwrap());
+                tr.push(*x);
+                if is_accepting {
+                    accepting.insert(*x);
+                }
+            }
+
+            transitions.insert(Self::set_to_vec(eval.current_states_idx()), tr);
+        }
+
+        let sorted_keys = {
+            let mut vec = map.iter().collect::<Vec<_>>();
+            vec.sort_by_key(|(_, &n)| n);
+            vec
+        };
+
+        let states = sorted_keys
+            .into_iter()
+            .map(|(key, &n)| DfaState {
+                name: n.to_string(),
+                initial: n == 0,
+                accepting: accepting.contains(&n),
+                transitions: transitions.remove(key).unwrap(),
+            })
+            .collect();
+
+        Dfa {
+            alphabet: self.alphabet.clone(),
+            states,
+            initial_state: 0,
+        }
+    }
+
     pub fn accepts(&self, string: &[&str]) -> bool {
         let mut eval = self.evaluator();
         eval.step_multiple(string);
@@ -106,26 +161,8 @@ impl Nfa {
         let mut evaluators_to_explore = vec![(self.evaluator(), other.evaluator())];
         let mut explored_states = HashSet::new();
         explored_states.insert((
-            {
-                let mut vec = evaluators_to_explore[0]
-                    .0
-                    .current_states_idx()
-                    .iter()
-                    .copied()
-                    .collect::<Vec<_>>();
-                vec.sort();
-                vec
-            },
-            {
-                let mut vec = evaluators_to_explore[0]
-                    .1
-                    .current_states_idx()
-                    .iter()
-                    .copied()
-                    .collect::<Vec<_>>();
-                vec.sort();
-                vec
-            },
+            Self::set_to_vec(evaluators_to_explore[0].0.current_states_idx()),
+            Self::set_to_vec(evaluators_to_explore[0].1.current_states_idx()),
         ));
 
         while let Some((s1, s2)) = evaluators_to_explore.pop() {
@@ -141,21 +178,19 @@ impl Nfa {
                 let mut d2 = s2.clone();
                 d2.step(elem);
                 if explored_states.insert((
-                    {
-                        let mut vec = d1.current_states_idx().iter().copied().collect::<Vec<_>>();
-                        vec.sort();
-                        vec
-                    },
-                    {
-                        let mut vec = d2.current_states_idx().iter().copied().collect::<Vec<_>>();
-                        vec.sort();
-                        vec
-                    },
+                    Self::set_to_vec(d1.current_states_idx()),
+                    Self::set_to_vec(d2.current_states_idx()),
                 )) {
                     evaluators_to_explore.push((d1, d2));
                 }
             }
         }
         true
+    }
+
+    fn set_to_vec(set: &HashSet<usize>) -> Vec<usize> {
+        let mut vec = set.iter().copied().collect::<Vec<_>>();
+        vec.sort();
+        vec
     }
 }

@@ -25,7 +25,7 @@ impl<'a> NfaEvaluator<'a> {
         &self.current_states
     }
 
-    pub fn step_all(&self) -> Vec<NfaEvaluator> {
+    pub fn step_all(&self) -> Vec<NfaEvaluator<'a>> {
         iter::repeat(self.clone())
             .zip(&self.nfa.alphabet)
             .map(|(mut eval, elem)| {

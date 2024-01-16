@@ -22,7 +22,7 @@ impl<'a> DfaEvaluator<'a> {
         self.current_state
     }
 
-    pub fn step_all(&self) -> Vec<DfaEvaluator> {
+    pub fn step_all(&self) -> Vec<DfaEvaluator<'a>> {
         iter::repeat(self.clone())
             .zip(&self.dfa.alphabet)
             .map(|(mut eval, elem)| {

@@ -51,4 +51,16 @@ fn main() {
 
     println!("{}", dfa2.to_table());
     println!("{}", dfa2.to_nfa().to_table());
+
+    println!("Converted: (power construction)");
+    println!("{}", nfa2.to_dfa().to_table());
+
+    let eq_nfa_dfa = dandy::parser::dfa(include_str!("eq_example2_nfa.dfa"))
+        .unwrap()
+        .1;
+    let eq_nfa_dfa: dandy::dfa::Dfa = eq_nfa_dfa.try_into().unwrap();
+    println!("Other:");
+    println!("{}", eq_nfa_dfa.to_table());
+
+    println!("Equivalent: {}", eq_nfa_dfa.equivalent_to(&nfa2.to_dfa()))
 }

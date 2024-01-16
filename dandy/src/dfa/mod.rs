@@ -1,24 +1,24 @@
 use crate::dfa::eval::DfaEvaluator;
+use crate::nfa::{Nfa, NfaState};
 use crate::table::Table;
 use std::collections::HashSet;
-use crate::nfa::{Nfa, NfaState};
 
 pub mod eval;
 pub mod parse;
 
 #[derive(Clone, Debug)]
 pub struct Dfa {
-    alphabet: Vec<String>,
-    states: Vec<DfaState>,
-    initial_state: usize,
+    pub(crate) alphabet: Vec<String>,
+    pub(crate) states: Vec<DfaState>,
+    pub(crate) initial_state: usize,
 }
 
 #[derive(Clone, Debug)]
 pub struct DfaState {
-    name: String,
-    initial: bool,
-    accepting: bool,
-    transitions: Vec<usize>,
+    pub(crate) name: String,
+    pub(crate) initial: bool,
+    pub(crate) accepting: bool,
+    pub(crate) transitions: Vec<usize>,
 }
 
 impl From<DfaState> for NfaState {
@@ -27,7 +27,7 @@ impl From<DfaState> for NfaState {
             name,
             initial,
             accepting,
-            transitions
+            transitions,
         } = value;
         NfaState {
             name,
@@ -50,7 +50,7 @@ impl Dfa {
         let Dfa {
             alphabet,
             states,
-            initial_state
+            initial_state,
         } = self;
         let states = states.into_iter().map(|s| s.into()).collect();
         Nfa {

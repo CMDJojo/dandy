@@ -8,3 +8,25 @@ s₂ {} {s₁ s₄} {s₃}
 s₃ {s₅} {s₄ s₅} {}
 s₄ {s₃} {} {s₅}
 * s₅ {} {s₅} {s₅}
+
+# to dfa:
+#                      a                  b
+# -> {s0}              {s1 s2}            {s0 s2}
+#    {s1 s2}           {s1 s2 s3 s4 s5}   {s3 s5}
+#    {s0 s2}           {s1 s2 s3 s4 s5}   {s0 s2 s3 s5}
+#  * {s1 s2 s3 s4 s5}  {s1 s2 s3 s4 s5}   {s3 s5}
+#  * {s3 s5}           {s3 s4 s5}         {s5}
+#  * {s0 s2 s3 s5}     {s1 s2 s3 s4 s5}   {s0 s2 s3 s5}
+#  * {s3 s4 s5}        {s3 s4 s5}         {s5}
+#  * {s5}              {s5}               {s5}
+
+# renamed states:
+#       a b
+# -> a  b c
+#    b  d e
+#    c  d f
+#  * d  d e
+#  * e  g h
+#  * f  d f
+#  * g  g h
+#  * h  h h

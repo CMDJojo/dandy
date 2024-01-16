@@ -1,0 +1,10 @@
+# renamed states:
+       a b
+ -> a  b c
+    b  d e
+    c  d f
+  * d  d e
+  * e  g h
+  * f  d f
+  * g  g h
+  * h  h h
