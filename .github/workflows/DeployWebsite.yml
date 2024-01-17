@@ -1,0 +1,62 @@
+# This is a workflow based on an example provided by GitHub and on rossjrw/pr-preview-action
+name: Deploy main website
+
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches: ["main"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "deploy-main"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./dandy-wasm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Pages
+        uses: actions/configure-pages@v2
+      - name: Install toolchain (minimal, stable, wasm32-unknown-unknown + wasm32-wasi)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32-wasi
+      - name: Install wasm-opt
+        run: |
+          npm i wasm-opt -g
+          mkdir $(dirname $(which wasm-opt))/bin
+          ln -s $(which wasm-opt) $(dirname $(which wasm-opt))/bin/wasm-opt
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+      - name: Build website
+        run: |
+          chmod +x ./build.sh
+          ./build.sh
+      - name: Remove auto-generated .gitignore
+        run: rm ../web-build/web_bindings/.gitignore
+      - name: Copy deployment files
+        run: |
+          mkdir ../site-deploy
+          cp -r ../web-build/* ../site-deploy
+      - name: Print generated files
+        run: ls -R ../site-deploy
+      - name: Deploy website
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: site-deploy
+          branch: gh-pages
+          clean: true
+          single-commit: true
