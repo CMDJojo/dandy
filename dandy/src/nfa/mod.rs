@@ -26,6 +26,29 @@ pub struct NfaState {
     pub(crate) transitions: Vec<Vec<usize>>,
 }
 
+impl NfaState {
+    /// Gets the name of this state
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Checks if this state is the initial state
+    pub fn is_initial(&self) -> bool {
+        self.initial
+    }
+
+    /// Checks if this state is accepting
+    pub fn is_accepting(&self) -> bool {
+        self.accepting
+    }
+
+    /// Gets a list of transitions, as sets of state indices for each element of the alphabet, in the alphabet's
+    /// ordering
+    pub fn transitions(&self) -> &[Vec<usize>] {
+        self.transitions.as_slice()
+    }
+}
+
 impl Nfa {
     /// Converts this NFA to a DFA using the subset construction.
     /// Note that this is a somewhat expensive operation. The names of
@@ -232,5 +255,25 @@ impl Nfa {
         let mut vec = set.iter().cloned().collect::<Vec<_>>();
         vec.sort();
         vec
+    }
+
+    /// Gets the alphabet of this NFA
+    pub fn alphabet(&self) -> &[String] {
+        self.alphabet.as_slice()
+    }
+
+    /// Gets the states of this NFA
+    pub fn states(&self) -> &[NfaState] {
+        self.states.as_slice()
+    }
+
+    /// Gets the initial state of this NFA
+    pub fn initial_state(&self) -> &NfaState {
+        &self.states[self.initial_state]
+    }
+
+    /// Get the index of the initial state of this NFA
+    pub fn initial_state_index(&self) -> usize {
+        self.initial_state
     }
 }

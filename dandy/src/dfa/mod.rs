@@ -24,6 +24,28 @@ pub struct DfaState {
     pub(crate) transitions: Vec<usize>,
 }
 
+impl DfaState {
+    /// Gets the name of this state
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Checks if this state is the initial state
+    pub fn is_initial(&self) -> bool {
+        self.initial
+    }
+
+    /// Checks if this state is accepting
+    pub fn is_accepting(&self) -> bool {
+        self.accepting
+    }
+
+    /// Gets a list of transitions, as state indices for each element of the alphabet, in the alphabet's ordering
+    pub fn transitions(&self) -> &[usize] {
+        self.transitions.as_slice()
+    }
+}
+
 impl From<DfaState> for NfaState {
     fn from(value: DfaState) -> Self {
         let DfaState {
@@ -158,5 +180,25 @@ impl Dfa {
             }
         }
         true
+    }
+
+    /// Gets the alphabet of this DFA
+    pub fn alphabet(&self) -> &[String] {
+        self.alphabet.as_slice()
+    }
+
+    /// Gets the states of this DFA
+    pub fn states(&self) -> &[DfaState] {
+        self.states.as_slice()
+    }
+
+    /// Gets the initial state of this DFA
+    pub fn initial_state(&self) -> &DfaState {
+        &self.states[self.initial_state]
+    }
+
+    /// Get the index of the initial state of this DFA
+    pub fn initial_state_index(&self) -> usize {
+        self.initial_state
     }
 }
