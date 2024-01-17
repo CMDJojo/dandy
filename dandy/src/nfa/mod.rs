@@ -27,7 +27,7 @@ pub struct NfaState {
 }
 
 impl Nfa {
-    /// Converts this NFA to a DFA using the powerset construction.
+    /// Converts this NFA to a DFA using the subset construction.
     /// Note that this is a somewhat expensive operation. The names of
     /// the states in the resulting DFA are non-deterministic, named
     /// sequentially from 0. The state named 0 is guaranteed to be the

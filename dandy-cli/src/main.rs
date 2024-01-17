@@ -256,7 +256,7 @@ fn main2() {
     println!("{}", dfa2.to_table());
     println!("{}", dfa2.to_nfa().to_table());
 
-    println!("Converted: (power construction)");
+    println!("Converted: (subset construction)");
     println!("{}", nfa2.to_dfa().to_table());
 
     let eq_nfa_dfa = parser::dfa(include_str!("eq_example2_nfa.dfa"))

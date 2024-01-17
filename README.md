@@ -22,7 +22,7 @@ website is located in `web-build`.
 
 * Parsing DFAs/NFAs from the specified format
 * Evaluating the DFA/NFA under some string
-* Converting between DFAs and NFAs (DFA to NFA uses powerset construction with inaccessible states removed)
+* Converting between DFAs and NFAs (DFA to NFA uses subset construction with inaccessible states removed)
 * Checking equivalence between two DFAs or NFAs
 * Printing DFAs/NFAs as tables that can then be parsed again
 * Some wasm bindings and a simple website

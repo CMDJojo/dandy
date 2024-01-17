@@ -8,7 +8,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_powerset_construction() {
+    fn test_subset_construction() {
         let dfa_source = include_str!("../tests/test_files/eq_to_nfa1.dfa");
         let parsed_dfa = parser::full_dfa(dfa_source).unwrap().1;
         let dfa: dfa::Dfa = parsed_dfa.try_into().unwrap();
