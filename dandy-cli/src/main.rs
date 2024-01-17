@@ -172,10 +172,12 @@ fn do_equivalence_check(args: &Args, verify_fn: impl Fn(&str) -> EquivalenceResu
     )
 }
 
-fn test(args: &Args, file: &str) {
+fn test(_args: &Args, _file: &str) {
     todo!()
 }
 
+// Code from readme to check validity
+#[allow(dead_code)]
 fn main1() {
     let raw_dfa = "
            a  b  c
@@ -200,6 +202,8 @@ fn main1() {
     assert!(dfa.equivalent_to(&dfa2));
 }
 
+// Temporary code for testing
+#[allow(dead_code)]
 fn main2() {
     println!("Hello, world!");
     let dfa = dandy::parser::dfa(include_str!("example.dfa"));
