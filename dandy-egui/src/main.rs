@@ -1,6 +1,7 @@
 use eframe::egui;
 use egui::{Color32, pos2};
 use dandy::dfa::Dfa;
+use dandy::nfa::Nfa;
 use crate::lib::EguiDrawer;
 
 mod lib;
@@ -8,7 +9,12 @@ mod lib;
 fn test_ascii_draw() {
     let str = include_str!("../../dandy-cli/src/example2.dfa");
     let dfa: Dfa = dandy::parser::dfa(str).unwrap().try_into().unwrap();
-    let ascii_art = dandy_draw::ascii_art(&dfa);
+    let ascii_art = dandy_draw::dfa_ascii_art(&dfa);
+    println!("{ascii_art}");
+
+    let str = include_str!("../../dandy-cli/src/example2.nfa");
+    let nfa: Nfa = dandy::parser::nfa(str).unwrap().try_into().unwrap();
+    let ascii_art = dandy_draw::nfa_ascii_art(&nfa);
     println!("{ascii_art}");
 }
 

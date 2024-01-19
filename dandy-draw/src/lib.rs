@@ -1,9 +1,9 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::mem;
-use dandy::dfa::Dfa;
-use dandy::nfa::Nfa;
+use dandy::dfa::{Dfa, DfaState};
+use dandy::nfa::{Nfa, NfaState};
 
 pub fn draw_demo(drawer: &mut impl Drawer) {
     drawer.start_drawing();
@@ -21,8 +21,26 @@ pub trait Drawer {
     fn draw_line(&mut self, from: (f32, f32), to: (f32, f32), thickness: f32);
 }
 
-pub fn ascii_art(dfa: &Dfa) -> String {
-    let widest_state_name = dfa.states().iter().map(|s| s.name().chars().count()).max().unwrap();
+pub fn dfa_ascii_art(dfa: &Dfa) -> String {
+    let states = dfa.states().iter().map(|s| s.into()).collect::<Vec<State>>();
+    let arrows = dfa_to_arrows(dfa);
+    ascii_art(states, arrows)
+}
+
+pub fn nfa_ascii_art(nfa: &Nfa) -> String {
+    let states = nfa.states().iter().map(|s| s.into()).collect::<Vec<State>>();
+    let arrows = nfa_to_arrows(nfa);
+    ascii_art(states, arrows)
+}
+
+
+fn ascii_art<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>) -> String {
+    let widest_state_name = states.iter().map(|s| s.name.chars().count()).max().unwrap();
+
+    // optional grouping
+    let arrows = group_arrows(arrows);
+    let (arrows, levels) = place_arrows(arrows);
+
     let left_x_idx = |idx: usize| -> usize {
         //-> ((a))
         5 + (7 + widest_state_name) * idx
@@ -31,7 +49,7 @@ pub fn ascii_art(dfa: &Dfa) -> String {
         //-> ((a))
         6 + widest_state_name + (7 + widest_state_name) * idx
     };
-    let art_width = right_x_idx(dfa.states().len()) - 1;
+    let art_width = right_x_idx(states.len()) - 1;
 
     let last_line = {
         let pad = |s: &str, l: usize| {
@@ -46,25 +64,27 @@ pub fn ascii_art(dfa: &Dfa) -> String {
 
         let mut acc = String::with_capacity(art_width);
         acc.push_str("-> ");
-        dfa.states().iter().for_each(|state|
-            if state.is_accepting() {
-                acc.push_str(&format!("(( {} )) ", pad(state.name(), widest_state_name)))
+        states.iter().for_each(|state|
+            if state.accepting {
+                acc.push_str(&format!("(( {} )) ", pad(state.name, widest_state_name)))
             } else {
-                acc.push_str(&format!("(  {}  ) ", pad(state.name(), widest_state_name)))
+                acc.push_str(&format!("(  {}  ) ", pad(state.name, widest_state_name)))
             }
         );
         acc
     };
 
-    let arrows = dfa_to_arrows(dfa);
-    // optional grouping
-    let arrows = group_arrows(arrows);
-
-    let (arrows, levels) = dbg!(place_arrows(arrows));
     let mut lines = Vec::with_capacity(levels * 2 + 1);
+    let mut bars = HashSet::new();
     for level in (0..levels).rev() {
         let mut top_line = " ".repeat(art_width);
         let mut bot_line = " ".repeat(art_width);
+
+        bars.iter().for_each(|&bar| {
+            unsafe { top_line.as_bytes_mut()[bar] = b'|' }
+            unsafe { bot_line.as_bytes_mut()[bar] = b'|' }
+        });
+
         arrows.iter()
             .filter(|arrow| arrow.level == level)
             .for_each(|arrow| {
@@ -96,17 +116,31 @@ pub fn ascii_art(dfa: &Dfa) -> String {
                             ] = b'>'
                     }
                 }
+
+                bars.insert(right_x_idx(arrow.arrow.left));
+                bars.insert(left_x_idx(arrow.arrow.right));
                 unsafe { bot_line.as_bytes_mut()[right_x_idx(arrow.arrow.left)] = b'|' }
                 unsafe { bot_line.as_bytes_mut()[left_x_idx(arrow.arrow.right)] = b'|' }
+            });
+        // We do this in a second for loop to
+        // * make sure all shapes have been drawn out
+        // * to draw the labels "on top" of those shapes
+        // * to be able to disable label drawing
+        arrows.iter().filter(|arrow| arrow.level == level)
+            .for_each(|arrow| {
                 // copy label
                 if arrow.arrow.left != arrow.arrow.right {
+                    // Note that label can be non-ascii (as for ε), so make sure we replace correct amnt of spaces
                     let label = arrow.arrow.label();
                     let range = {
+                        // We need to replace the nth *char* which is not necessarily same as the nth byte (we could
+                        // have inserted labels to the left)
                         let start = right_x_idx(arrow.arrow.left);
-                        start + 1..start + label.len() + 1
+                        let start = bot_line.char_indices().nth(start).unwrap().0;
+                        // We need to replace equally many spaces as the label has (visible) chars
+                        start + 1..start + label.chars().count() + 1
                     };
-                    // SAFETY: beforehand only ascii, and label is valid string
-                    unsafe { bot_line.as_bytes_mut()[range].copy_from_slice(label.as_bytes()) }
+                    bot_line.replace_range(range, &label);
                 } else {
                     // Space is tight, so don't print this
                     // let label = arrow.arrow.label();
@@ -126,17 +160,19 @@ pub fn ascii_art(dfa: &Dfa) -> String {
     lines.join("\n")
 }
 
-fn dfa_to_arrows<'a>(dfa: &'a Dfa) -> Vec<Arrow<'a>> {
+fn dfa_to_arrows(dfa: &Dfa) -> Vec<Arrow> {
     dfa.states().iter().enumerate().flat_map(|(from, state)|
-        state.transitions().iter().enumerate().map(move |(idx, to)| Arrow::new(from, *to, dfa.states()[idx].name()))
+        state.transitions().iter().enumerate().map(move |(idx, to)| Arrow::new(from, *to, &dfa.alphabet()[idx]))
     ).collect()
 }
 
 fn nfa_to_arrows(nfa: &Nfa) -> Vec<Arrow> {
     nfa.states().iter().enumerate().flat_map(|(from, state)|
         state.transitions().iter().enumerate().flat_map(move |(idx, tos)|
-            tos.iter().map(move |to| Arrow::new(from, *to, nfa.states()[idx].name()))
-        )
+            tos.iter().map(move |to| Arrow::new(from, *to, &nfa.alphabet()[idx]))
+        ).chain(state.epsilon_transitions().iter().map(move |to|
+            Arrow::new(from, *to, "ε")
+        ))
     ).collect()
 }
 
@@ -174,17 +210,15 @@ fn place_arrows<'a, T: ArrowLike<'a>>(arrows: Vec<T>) -> (Vec<PlacedArrow<'a, T>
     (placed, current_depth)
 }
 
-fn group_arrows<'a>(arrows: Vec<Arrow<'a>>) -> Vec<GroupedArrow<'a>> {
+fn group_arrows(arrows: Vec<Arrow>) -> Vec<GroupedArrow> {
     arrows
         .into_iter()
-        .fold(HashMap::<_, Vec<Arrow>>::new(), |mut map, arrow|
-            {
-                map.entry((arrow.left, arrow.right, arrow.direction))
-                    .or_default()
-                    .push(arrow);
-                map
-            },
-        )
+        .fold(HashMap::<_, Vec<Arrow>>::new(), |mut map, arrow| {
+            map.entry((arrow.left, arrow.right, arrow.direction))
+                .or_default()
+                .push(arrow);
+            map
+        })
         .drain()
         .map(|((left, right, direction), arrows)|
             GroupedArrow {
@@ -299,3 +333,28 @@ impl<'a> ArrowLike<'a> for GroupedArrow<'a> {
     }
 }
 
+struct State<'a> {
+    name: &'a str,
+    accepting: bool,
+    initial: bool,
+}
+
+impl<'a> From<&'a DfaState> for State<'a> {
+    fn from(value: &'a DfaState) -> Self {
+        State {
+            name: value.name(),
+            accepting: value.is_accepting(),
+            initial: value.is_initial(),
+        }
+    }
+}
+
+impl<'a> From<&'a NfaState> for State<'a> {
+    fn from(value: &'a NfaState) -> Self {
+        State {
+            name: value.name(),
+            accepting: value.is_accepting(),
+            initial: value.is_initial(),
+        }
+    }
+}
