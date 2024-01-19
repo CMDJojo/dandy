@@ -47,6 +47,11 @@ impl NfaState {
     pub fn transitions(&self) -> &[Vec<usize>] {
         self.transitions.as_slice()
     }
+
+    /// Gets the epsilon transitions as a set of state indices
+    pub fn epsilon_transitions(&self) -> &[usize] {
+        self.epsilon_transitions.as_slice()
+    }
 }
 
 impl Nfa {
