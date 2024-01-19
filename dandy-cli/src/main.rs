@@ -18,12 +18,16 @@ use dandy::parser::ParsedDfa;
 #[derive(Parser, Debug)]
 #[command(version, author = "Jonathan Widén", about = "A cli tool for importing and checking DFAs and NFAs", long_about)]
 struct Args {
-    #[arg(short, long, value_enum, default_value_t)]
+    #[arg(short, long, value_enum, default_value_t, help = "Choose if testing DFAs or NFAs")]
     r#type: FaType,
-    #[arg(short, long, value_enum, default_value_t)]
+    #[arg(short, long, value_enum, default_value_t, help = "(For 'test' operation): Choose if all lines or one line per file must be accepted by the automata")]
     condition: TestType,
-    #[arg()]
+    #[arg(help = "Choose if you want to check what files define automata equivalent to the given automata, or what files has lines accepted by the automata")]
     operation: OpType,
+    //#[arg(short, long, default_value_t, help = "(For 'equivalence' operation): Requires the DFAs/NFAs to be minimized")]
+    //minimized: bool,
+    #[arg(short, long, default_value_t, help = "Output 'true'/'false' rather than a result in text format")]
+    r#bool: bool,
     #[arg()]
     automata: PathBuf,
     #[arg()]
@@ -70,6 +74,7 @@ fn main() {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum EquivalenceResult {
     FailedToRead(String),
     FailedToParse(String),
@@ -167,9 +172,14 @@ fn do_equivalence_check(args: &Args, verify_fn: impl Fn(&str) -> EquivalenceResu
         }
     ).zip(args.files.iter()).collect::<Vec<_>>();
 
-    results.iter().for_each(|(res, path)|
-        println!("{}: {}", path.to_string_lossy(), res.to_string())
-    )
+    results.iter().for_each(|(res, path)| {
+        let out = if args.bool {
+            (res == &EquivalenceResult::Equivalent).to_string()
+        } else {
+            res.to_string()
+        };
+        println!("{}: {}", path.to_string_lossy(), out)
+    })
 }
 
 fn test(_args: &Args, _file: &str) {
