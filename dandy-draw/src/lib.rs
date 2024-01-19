@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::mem;
 use dandy::dfa::Dfa;
 use dandy::nfa::Nfa;
@@ -54,6 +57,8 @@ pub fn ascii_art(dfa: &Dfa) -> String {
     };
 
     let arrows = dfa_to_arrows(dfa);
+    // optional grouping
+    let arrows = group_arrows(arrows);
 
     let (arrows, levels) = dbg!(place_arrows(arrows));
     let mut lines = Vec::with_capacity(levels * 2 + 1);
@@ -93,6 +98,25 @@ pub fn ascii_art(dfa: &Dfa) -> String {
                 }
                 unsafe { bot_line.as_bytes_mut()[right_x_idx(arrow.arrow.left)] = b'|' }
                 unsafe { bot_line.as_bytes_mut()[left_x_idx(arrow.arrow.right)] = b'|' }
+                // copy label
+                if arrow.arrow.left != arrow.arrow.right {
+                    let label = arrow.arrow.label();
+                    let range = {
+                        let start = right_x_idx(arrow.arrow.left);
+                        start + 1..start + label.len() + 1
+                    };
+                    // SAFETY: beforehand only ascii, and label is valid string
+                    unsafe { bot_line.as_bytes_mut()[range].copy_from_slice(label.as_bytes()) }
+                } else {
+                    // Space is tight, so don't print this
+                    // let label = arrow.arrow.label();
+                    // let range = {
+                    //     let start = left_x_idx(arrow.arrow.left);
+                    //     start + 1..start + label.len() + 1
+                    // };
+                    // // SAFETY: beforehand only ascii, and label is valid string
+                    // unsafe { bot_line.as_bytes_mut()[range].copy_from_slice(label.as_bytes()) }
+                }
             });
         lines.push(top_line);
         lines.push(bot_line);
@@ -102,23 +126,23 @@ pub fn ascii_art(dfa: &Dfa) -> String {
     lines.join("\n")
 }
 
-fn dfa_to_arrows(dfa: &Dfa) -> Vec<Arrow> {
+fn dfa_to_arrows<'a>(dfa: &'a Dfa) -> Vec<Arrow<'a>> {
     dfa.states().iter().enumerate().flat_map(|(from, state)|
-        state.transitions().iter().map(move |to| Arrow::new(from, *to))
+        state.transitions().iter().enumerate().map(move |(idx, to)| Arrow::new(from, *to, dfa.states()[idx].name()))
     ).collect()
 }
 
 fn nfa_to_arrows(nfa: &Nfa) -> Vec<Arrow> {
     nfa.states().iter().enumerate().flat_map(|(from, state)|
-        state.transitions().iter().flat_map(move |tos|
-            tos.iter().map(move |to| Arrow::new(from, *to))
+        state.transitions().iter().enumerate().flat_map(move |(idx, tos)|
+            tos.iter().map(move |to| Arrow::new(from, *to, nfa.states()[idx].name()))
         )
     ).collect()
 }
 
-fn place_arrows(arrows: Vec<Arrow>) -> (Vec<PlacedArrow>, usize) {
+fn place_arrows<'a, T: ArrowLike<'a>>(arrows: Vec<T>) -> (Vec<PlacedArrow<'a, T>>, usize) {
     let mut unplaced = arrows;
-    unplaced.sort_by_key(|arrow| usize::MAX - arrow.right); // sort in reverse order
+    unplaced.sort_by_key(|arrow| usize::MAX - arrow.right()); // sort in reverse order
     let mut current_depth = 0;
     let mut end_of_last = 0;
     let mut placed = Vec::with_capacity(unplaced.len());
@@ -127,15 +151,16 @@ fn place_arrows(arrows: Vec<Arrow>) -> (Vec<PlacedArrow>, usize) {
         // do one pass and place as many arrows as possible
         let mut old_unplaced = mem::take(&mut unplaced);
         while let Some(arrow) = old_unplaced.pop() {
-            if arrow.left >= end_of_last {
-                if arrow.left == arrow.right {
-                    end_of_last = arrow.right + 1;
+            if arrow.left() >= end_of_last {
+                if arrow.left() == arrow.right() {
+                    end_of_last = arrow.right() + 1;
                 } else {
-                    end_of_last = arrow.right;
+                    end_of_last = arrow.right();
                 }
                 placed.push(PlacedArrow {
                     arrow,
                     level: current_depth,
+                    phantom: PhantomData,
                 });
             } else {
                 unplaced.push(arrow);
@@ -149,66 +174,128 @@ fn place_arrows(arrows: Vec<Arrow>) -> (Vec<PlacedArrow>, usize) {
     (placed, current_depth)
 }
 
-#[derive(Debug, PartialEq, Eq)]
-struct PlacedArrow {
-    arrow: Arrow,
-    level: usize,
+fn group_arrows<'a>(arrows: Vec<Arrow<'a>>) -> Vec<GroupedArrow<'a>> {
+    arrows
+        .into_iter()
+        .fold(HashMap::<_, Vec<Arrow>>::new(), |mut map, arrow|
+            {
+                map.entry((arrow.left, arrow.right, arrow.direction))
+                    .or_default()
+                    .push(arrow);
+                map
+            },
+        )
+        .drain()
+        .map(|((left, right, direction), arrows)|
+            GroupedArrow {
+                left,
+                right,
+                direction,
+                labels: arrows.into_iter().map(|arrow| arrow.label).collect(),
+            }
+        ).collect()
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct Arrow {
+struct PlacedArrow<'a, T: ArrowLike<'a>> {
+    arrow: T,
+    level: usize,
+    phantom: PhantomData<&'a T>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GroupedArrow<'a> {
     left: usize,
     right: usize,
     direction: Direction,
+    labels: Vec<&'a str>,
 }
 
-impl Arrow {
-    fn new(from: usize, to: usize) -> Self {
+#[derive(Debug, PartialEq, Eq)]
+struct Arrow<'a> {
+    left: usize,
+    right: usize,
+    direction: Direction,
+    label: &'a str,
+}
+
+impl<'a> Arrow<'a> {
+    fn new(from: usize, to: usize, label: &'a str) -> Self {
         use std::cmp::Ordering::*;
         use Direction::*;
-        assert!(from >= 0);
-        assert!(to >= 0);
         match from.cmp(&to) {
             Less =>
                 Arrow {
                     left: from,
                     right: to,
                     direction: Right,
+                    label,
                 },
             Equal =>
                 Arrow {
                     left: from,
                     right: to,
                     direction: Spot,
+                    label,
                 },
             Greater =>
                 Arrow {
                     left: to,
                     right: from,
                     direction: Left,
+                    label,
                 },
         }
-        /*
-        if from > to {
-            Arrow {
-                left: to,
-                right: from,
-                direction: Direction::Left,
-            }
-        } else {
-            Arrow {
-                left: from,
-                right: to,
-                direction: Direction::Right,
-            }
-        }
-         */
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 enum Direction {
     Left,
     Right,
     Spot,
 }
+
+trait ArrowLike<'a> {
+    fn left(&self) -> usize;
+    fn right(&self) -> usize;
+    fn direction(&self) -> Direction;
+    fn label(&self) -> Cow<'a, str>;
+}
+
+impl<'a> ArrowLike<'a> for Arrow<'a> {
+    fn left(&self) -> usize {
+        self.left
+    }
+
+    fn right(&self) -> usize {
+        self.right
+    }
+
+    fn direction(&self) -> Direction {
+        self.direction
+    }
+
+    fn label(&self) -> Cow<'a, str> {
+        Cow::Borrowed(self.label)
+    }
+}
+
+impl<'a> ArrowLike<'a> for GroupedArrow<'a> {
+    fn left(&self) -> usize {
+        self.left
+    }
+
+    fn right(&self) -> usize {
+        self.right
+    }
+
+    fn direction(&self) -> Direction {
+        self.direction
+    }
+
+    fn label(&self) -> Cow<'static, str> {
+        Cow::Owned(self.labels.join(", "))
+    }
+}
+
