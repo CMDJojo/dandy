@@ -1,10 +1,14 @@
+use dandy_draw::egui::EguiDrawer;
 use eframe::egui;
-use egui::{Color32, pos2};
+use egui::{FontSelection, TextStyle};
 use dandy::dfa::Dfa;
 use dandy::nfa::Nfa;
-use crate::lib::EguiDrawer;
 
-mod lib;
+fn example_dfa() -> Dfa {
+    dandy::parser::dfa(
+        include_str!("../../dandy-cli/src/example.dfa")
+    ).unwrap().try_into().unwrap()
+}
 
 fn test_ascii_draw() {
     let str = include_str!("../../dandy-cli/src/example2.dfa");
@@ -26,29 +30,26 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
 
-    // Our application state:
-    let mut name = "Arthur".to_owned();
-    let mut age = 42;
+    let mut dfa = example_dfa().to_table();
+    let mut dfa_to_render = dfa.clone();
 
-    eframe::run_simple_native("My egui App", options, move |ctx, _frame| {
+    eframe::run_simple_native("Display DFAs", options, move |ctx, _frame| {
         egui::CentralPanel::default().show(ctx, |ui| {
-            let painter = ui.painter();
-            painter.circle_filled(pos2(50.0, 50.0), 20.0, Color32::from_rgb(255, 0, 0));
+            ui.add(
+                egui::TextEdit::multiline(&mut dfa).font(FontSelection::Style(TextStyle::Monospace))
+            );
 
-            let mut drawer = EguiDrawer { painter };
-            dandy_draw::draw_demo(&mut drawer);
-
-            ui.heading("My egui Application");
-            ui.horizontal(|ui| {
-                let name_label = ui.label("Your name: ");
-                ui.text_edit_singleline(&mut name)
-                    .labelled_by(name_label.id);
-            });
-            ui.add(egui::Slider::new(&mut age, 0..=120).text("age"));
-            if ui.button("Click each year").clicked() {
-                age += 1;
+            if ui.button("Render").clicked() {
+                dfa_to_render = dfa.clone();
             }
-            ui.label(format!("Hello '{name}', age {age}"));
+
+            egui::Area::new("DFA").show(ui.ctx(), |ui| {
+                let painter = ui.painter();
+                let mut drawer = EguiDrawer::new(painter);
+                if let Some(Ok(dfa)) = dandy::parser::dfa(&dfa_to_render).ok().map(TryInto::try_into) {
+                    dandy_draw::draw_dfa(&dfa, &mut drawer);
+                }
+            });
         });
     })
 }

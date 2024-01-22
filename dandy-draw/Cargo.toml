@@ -6,4 +6,24 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dandy = { path = "../dandy", version = "*"}
+dandy = { path = "../dandy", version = "*" }
+
+[dependencies.egui]
+version = "0.25.0"
+optional = true
+
+[dependencies.web-sys]
+version = "0.3.67"
+features = [
+    'CanvasRenderingContext2d',
+    'Document',
+    'Element',
+    'HtmlCanvasElement',
+    'Window',
+]
+optional = true
+
+[features]
+canvas = ["dep:web-sys"]
+egui = ["dep:egui"]
+default = ["egui", "canvas"]

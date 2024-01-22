@@ -1,3 +1,8 @@
+#[cfg(feature = "egui")]
+pub mod egui;
+#[cfg(feature = "canvas")]
+pub mod canvas;
+
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
@@ -19,16 +24,151 @@ pub trait Drawer {
     fn draw_centered_text(&mut self, pos: (f32, f32), text: &str);
     fn draw_rect(&mut self, upper_left: (f32, f32), size: (f32, f32));
     fn draw_line(&mut self, from: (f32, f32), to: (f32, f32), thickness: f32);
+    fn set_color(&mut self, _rgb: [u8; 3]) {}
 }
 
+macro_rules! define_draw_options {
+    ($name:ident {
+        $($field:ident : $ty:ty = $def:expr,)*
+    }) => {
+        pub struct $name {
+            $($field: $ty,)*
+        }
+
+        impl $name {
+            pub fn new($($field: $ty,)*) -> Self {
+                Self {
+                    $($field,)*
+                }
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self::new(
+                    $($def,)*
+                )
+            }
+        }
+    }
+}
+
+
+define_draw_options! {
+    DrawOptions {
+        center_line_padding: f32 = 20.0,
+        circle_radius: f32 = 30.0,
+        circle_width: f32 = 2.0,
+        accepting_circle_radius: f32 = 25.0,
+        accepting_circle_width: f32 = 2.0,
+        init_arrow_length: f32 = 80.0,
+        init_arrow_arms_length: f32 = 30.0,
+        init_arrow_width: f32 = 3.0,
+        trans_arrow_arms_length: f32 = 5.0,
+        trans_line_width: f32 = 3.0,
+        from_line_offset: f32 = 10.0,
+        to_line_offset: f32 = 10.0,
+        floor_height: f32 = 25.0,
+        text_margin: f32 = 15.0,
+        line_circle_margin: f32 = 10.0,
+        end_arrow: bool = true,
+        middle_arrow: bool = true,
+    }
+}
+
+pub fn draw_dfa(dfa: &Dfa, drawer: &mut impl Drawer) {
+    let states = dfa.states().iter().map(Into::into).collect::<Vec<State>>();
+    let arrows = dfa_to_arrows(dfa);
+    draw(states, arrows, drawer, DrawOptions::default())
+}
+
+fn draw<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>, drawer: &mut impl Drawer, opts: DrawOptions) {
+    let arrows = group_arrows(arrows);
+    let (arrows, levels) = place_arrows(arrows);
+    let levels = levels + 1;
+
+    let x_pos = |idx: usize| -> f32 {
+        opts.init_arrow_length + opts.center_line_padding + opts.circle_radius
+            + (opts.circle_radius * 2.0 + opts.center_line_padding) * idx as f32
+    };
+
+    let x_from_pos = |idx: usize| -> f32 {
+        x_pos(idx) + opts.from_line_offset
+    };
+
+    let x_to_pos = |idx: usize| -> f32 {
+        x_pos(idx) - opts.to_line_offset
+    };
+
+    let line_baseline = levels as f32 * opts.floor_height;
+    //let line_baseline = 0.0;
+    let circle_center = line_baseline + opts.line_circle_margin + opts.circle_radius;
+
+    // draw arrow
+    drawer.draw_line((0.0, circle_center), (opts.init_arrow_length, circle_center), opts.init_arrow_width);
+    drawer.draw_line((opts.init_arrow_length, circle_center), (opts.init_arrow_length - opts.init_arrow_arms_length, circle_center - opts.init_arrow_arms_length), opts.init_arrow_width);
+    drawer.draw_line((opts.init_arrow_length, circle_center), (opts.init_arrow_length - opts.init_arrow_arms_length, circle_center + opts.init_arrow_arms_length), opts.init_arrow_width);
+
+    // draw states
+    for (idx, state) in states.iter().enumerate() {
+        drawer.draw_circle((x_pos(idx), circle_center), opts.circle_radius, opts.circle_width);
+        if state.accepting {
+            drawer.draw_circle((x_pos(idx), circle_center), opts.accepting_circle_radius, opts.accepting_circle_width);
+        }
+        drawer.draw_centered_text((x_pos(idx), circle_center), state.name);
+    }
+
+    for arrow in arrows {
+        let line_height = opts.floor_height * (levels - arrow.level - 1) as f32;
+        drawer.draw_line(
+            (x_from_pos(arrow.arrow.left), line_baseline),
+            (x_from_pos(arrow.arrow.left), line_height),
+            opts.trans_line_width);
+        drawer.draw_line(
+            (x_to_pos(arrow.arrow.right), line_baseline),
+            (x_to_pos(arrow.arrow.right), line_height),
+            opts.trans_line_width);
+        drawer.draw_line(
+            (x_from_pos(arrow.arrow.left), line_height),
+            (x_to_pos(arrow.arrow.right), line_height),
+            opts.trans_line_width);
+        let middle = (x_from_pos(arrow.arrow.left) + x_to_pos(arrow.arrow.right)) / 2.0;
+
+
+        if opts.middle_arrow {
+            let mul = if arrow.arrow.direction == Direction::Left {
+                1.0
+            } else {
+                -1.0
+            };
+            let middle = middle - opts.trans_arrow_arms_length * mul * 0.5;
+            drawer.draw_line((middle, line_height), (middle + mul * opts.trans_arrow_arms_length, line_height + opts.trans_arrow_arms_length), opts.trans_line_width);
+            drawer.draw_line((middle, line_height), (middle + mul * opts.trans_arrow_arms_length, line_height - opts.trans_arrow_arms_length), opts.trans_line_width);
+        }
+
+        if opts.end_arrow {
+            let (x, y) = if arrow.arrow.direction == Direction::Right {
+                (x_to_pos(arrow.arrow.right), line_baseline)
+            } else {
+                (x_from_pos(arrow.arrow.left), line_baseline)
+            };
+            drawer.draw_line((x, y), (x - opts.trans_arrow_arms_length, y - opts.trans_arrow_arms_length), opts.trans_line_width);
+            drawer.draw_line((x, y), (x + opts.trans_arrow_arms_length, y - opts.trans_arrow_arms_length), opts.trans_line_width);
+        }
+
+        drawer.draw_centered_text((middle, line_height - opts.text_margin), &arrow.arrow.label());
+    }
+}
+
+
 pub fn dfa_ascii_art(dfa: &Dfa) -> String {
-    let states = dfa.states().iter().map(|s| s.into()).collect::<Vec<State>>();
+    let states = dfa.states().iter().map(Into::into).collect::<Vec<State>>();
     let arrows = dfa_to_arrows(dfa);
     ascii_art(states, arrows)
 }
 
 pub fn nfa_ascii_art(nfa: &Nfa) -> String {
-    let states = nfa.states().iter().map(|s| s.into()).collect::<Vec<State>>();
+    let states = nfa.states().iter().map(Into::into).collect::<Vec<State>>();
     let arrows = nfa_to_arrows(nfa);
     ascii_art(states, arrows)
 }
@@ -336,6 +476,7 @@ impl<'a> ArrowLike<'a> for GroupedArrow<'a> {
 struct State<'a> {
     name: &'a str,
     accepting: bool,
+    #[allow(dead_code)]
     initial: bool,
 }
 
