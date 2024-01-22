@@ -26,14 +26,17 @@ impl Drawer for CanvasDrawer {
     }
 
     fn finish_drawing(&mut self) {
-        self.context.close_path();
+        self.context.stroke();
     }
 
     fn draw_circle(&mut self, pos: Pos2, radius: f32, thickness: f32) {
+        self.context.begin_path();
         self.context.set_line_width(thickness as f64);
         self.context
             .arc(pos.x as f64, pos.y as f64, radius as f64, 0.0, 2.0 * PI)
             .unwrap();
+        self.context.stroke();
+        self.context.close_path();
     }
 
     fn draw_centered_text(&mut self, pos: Pos2, text: &str) {
@@ -52,8 +55,19 @@ impl Drawer for CanvasDrawer {
     }
 
     fn draw_line(&mut self, from: Pos2, to: Pos2, thickness: f32) {
+        self.context.begin_path();
         self.context.set_line_width(thickness as f64);
         self.context.move_to(from.x as f64, from.y as f64);
         self.context.line_to(to.x as f64, to.y as f64);
+        self.context.stroke();
+        self.context.close_path();
+    }
+
+    fn set_color(&mut self, rgb: [u8; 3]) {
+        let [r, g, b] = rgb;
+        self.context
+            .set_stroke_style(&format!("rgb({r} {g} {b})").into());
+        self.context
+            .set_fill_style(&format!("rgb({r} {g} {b})").into())
     }
 }

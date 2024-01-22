@@ -17,14 +17,17 @@
 //! }
 //! ```
 
+use dandy::dfa::parse::DfaParseError;
+use dandy::dfa::Dfa;
+use dandy::nfa::parse::NfaParseError;
+use dandy::nfa::Nfa;
+use dandy_draw::canvas::CanvasDrawer;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::RangeFrom;
-use dandy::dfa::parse::DfaParseError;
-use dandy::dfa::Dfa;
 use wasm_bindgen::prelude::wasm_bindgen;
-use dandy::nfa::Nfa;
-use dandy::nfa::parse::NfaParseError;
+use wasm_bindgen::JsCast;
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
 thread_local! {
     static DFA_MAP: RefCell<HashMap<usize, Dfa>> = RefCell::default();
@@ -33,23 +36,83 @@ thread_local! {
 }
 
 #[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+macro_rules! console_log {
+    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[wasm_bindgen]
+pub fn draw_dfa(dfa: usize, canvas_id: &str) -> bool {
+    let Some(dfa) = DFA_MAP.with_borrow(|map| map.get(&dfa).cloned()) else {
+        return false;
+    };
+
+    let document = web_sys::window().unwrap().document().unwrap();
+    let Some(canvas) = document.get_element_by_id(canvas_id) else {
+        return false;
+    };
+
+    let canvas: Result<HtmlCanvasElement, _> = canvas.dyn_into();
+    let Ok(canvas) = canvas else {
+        return false;
+    };
+
+    let context: CanvasRenderingContext2d = canvas
+        .get_context("2d")
+        .unwrap()
+        .unwrap()
+        .dyn_into()
+        .unwrap();
+    let mut drawer = CanvasDrawer::new(context);
+    dandy_draw::draw_dfa(&dfa, &mut drawer);
+
+    true
+}
+
+#[wasm_bindgen]
+pub fn draw_nfa(nfa: usize, canvas_id: &str) -> bool {
+    let Some(nfa) = NFA_MAP.with_borrow(|map| map.get(&nfa).cloned()) else {
+        return false;
+    };
+
+    let document = web_sys::window().unwrap().document().unwrap();
+    let Some(canvas) = document.get_element_by_id(canvas_id) else {
+        return false;
+    };
+
+    let canvas: Result<HtmlCanvasElement, _> = canvas.dyn_into();
+    let Ok(canvas) = canvas else {
+        return false;
+    };
+
+    let context: CanvasRenderingContext2d = canvas
+        .get_context("2d")
+        .unwrap()
+        .unwrap()
+        .dyn_into()
+        .unwrap();
+    let mut drawer = CanvasDrawer::new(context);
+    dandy_draw::draw_nfa(&nfa, &mut drawer);
+
+    true
+}
+
+#[wasm_bindgen]
 pub fn check_dfa_eq(dfa1: usize, dfa2: usize) -> Option<bool> {
-    DFA_MAP.with_borrow(|map|
-        Option::zip(
-            map.get(&dfa1),
-            map.get(&dfa2),
-        ).map(|(dfa1, dfa2)| dfa1.equivalent_to(dfa2))
-    )
+    DFA_MAP.with_borrow(|map| {
+        Option::zip(map.get(&dfa1), map.get(&dfa2)).map(|(dfa1, dfa2)| dfa1.equivalent_to(dfa2))
+    })
 }
 
 #[wasm_bindgen]
 pub fn check_nfa_eq(nfa1: usize, nfa2: usize) -> Option<bool> {
-    NFA_MAP.with_borrow(|map|
-        Option::zip(
-            map.get(&nfa1),
-            map.get(&nfa2),
-        ).map(|(nfa1, nfa2)| nfa1.equivalent_to(nfa2))
-    )
+    NFA_MAP.with_borrow(|map| {
+        Option::zip(map.get(&nfa1), map.get(&nfa2)).map(|(nfa1, nfa2)| nfa1.equivalent_to(nfa2))
+    })
 }
 
 #[wasm_bindgen]
@@ -68,16 +131,12 @@ pub fn nfa_to_dfa(nfa: usize) -> Option<usize> {
 
 #[wasm_bindgen]
 pub fn dfa_to_table(dfa: usize) -> Option<String> {
-    DFA_MAP.with_borrow(|map|
-        map.get(&dfa).map(Dfa::to_table)
-    )
+    DFA_MAP.with_borrow(|map| map.get(&dfa).map(Dfa::to_table))
 }
 
 #[wasm_bindgen]
 pub fn nfa_to_table(nfa: usize) -> Option<String> {
-    NFA_MAP.with_borrow(|map|
-        map.get(&nfa).map(Nfa::to_table)
-    )
+    NFA_MAP.with_borrow(|map| map.get(&nfa).map(Nfa::to_table))
 }
 
 #[wasm_bindgen]

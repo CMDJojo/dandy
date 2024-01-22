@@ -184,6 +184,7 @@ fn draw<'a>(
     let line_baseline = (levels + 1) as f32 * opts.floor_height;
     let circle_center = line_baseline + opts.line_circle_margin + opts.circle_radius;
 
+    drawer.start_drawing();
     // draw arrow
     {
         drawer.set_color(opts.line_color);
@@ -288,6 +289,7 @@ fn draw<'a>(
             &arrow.arrow.label(),
         );
     }
+    drawer.finish_drawing();
 }
 
 pub fn dfa_ascii_art(dfa: &Dfa) -> String {

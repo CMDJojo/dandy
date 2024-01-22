@@ -10,4 +10,16 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 dandy = { path = "../dandy" }
-wasm-bindgen = "0.2.89"
+dandy-draw = { path = "../dandy-draw", default-features = false, features = ["canvas"] }
+wasm-bindgen = "0.2.90"
+js-sys = "0.3.67"
+
+[dependencies.web-sys]
+version = "0.3.67"
+features = [
+    'CanvasRenderingContext2d',
+    'Document',
+    'Element',
+    'HtmlCanvasElement',
+    'Window',
+]

@@ -106,6 +106,32 @@ the DFA will appear here
     </textarea>
 </label>
 
+<br>
+<br>
+
+Visualize NFA here!
+<br>
+
+<label>
+    NFA:
+    <br>
+    <textarea id="nfa-visualize" rows="10">
+     ε    a       b
+→ s₀ {}   {s₁}    {s₀ s₂}
+  s₁ {s₂} {s₄}    {s₃}
+  s₂ {}   {s₁ s₄} {s₃}
+  s₃ {s₅} {s₄ s₅} {}
+  s₄ {s₃} {}      {s₅}
+* s₅ {}   {s₅}    {s₅}
+    </textarea>
+</label>
+<br>
+<button id="nfa-visualize-btn">Visualize!</button>
+<br>
+<label>
+    <canvas id="nfa-visualization" width=700, height=500, style="background: black"></canvas>
+</label>
+
 <script type="module">
     import init, {
         load_dfa,
@@ -113,18 +139,21 @@ the DFA will appear here
         delete_dfa,
         dfa_to_nfa,
         dfa_to_table,
+        draw_dfa,
         load_nfa,
         check_nfa_eq,
         delete_nfa,
         nfa_to_dfa,
-        nfa_to_table
+        nfa_to_table,
+        draw_nfa
     } from './web_bindings/dandy_wasm.js';
 
     async function run() {
         await init();
         document.getElementById("dfa-eq-check").onclick = checkDfaEq;
         document.getElementById("nfa-eq-check").onclick = checkNfaEq;
-        document.getElementById("nfa-to-dfa-btn").onclick = nfaToDfa
+        document.getElementById("nfa-to-dfa-btn").onclick = nfaToDfa;
+        document.getElementById("nfa-visualize-btn").onclick = visualizeNfa;
     }
 
     function checkDfaEq() {
@@ -195,6 +224,18 @@ the DFA will appear here
         document.getElementById("nfa-to-dfa-out").value = dfa_to_table(dfa).replace("\n", "\r\n");
         delete_nfa(nfa);
         delete_dfa(dfa);
+    }
+
+    function visualizeNfa() {
+        let nfa = 0;
+        try {
+            nfa = load_nfa(document.getElementById("nfa-visualize").value);
+            document.getElementById("nfa-visualize-btn").innerText = "Visualize!";
+        } catch (e) {
+            document.getElementById("nfa-visualize-btn").innerText = e;
+            return;
+        }
+        draw_nfa(nfa, "nfa-visualization");
     }
 
     run();
