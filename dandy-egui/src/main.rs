@@ -1,13 +1,15 @@
-use dandy_draw::egui::EguiDrawer;
-use eframe::egui;
-use egui::{FontSelection, TextStyle};
 use dandy::dfa::Dfa;
 use dandy::nfa::Nfa;
+use dandy_draw::egui::EguiDrawer;
+use dandy_draw::DrawOptions;
+use eframe::egui;
+use egui::{FontSelection, TextStyle};
 
 fn example_dfa() -> Dfa {
-    dandy::parser::dfa(
-        include_str!("../../dandy-cli/src/example.dfa")
-    ).unwrap().try_into().unwrap()
+    dandy::parser::dfa(include_str!("../../dandy-cli/src/example.dfa"))
+        .unwrap()
+        .try_into()
+        .unwrap()
 }
 
 fn test_ascii_draw() {
@@ -26,7 +28,7 @@ fn main() -> Result<(), eframe::Error> {
     test_ascii_draw();
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([500.0, 500.0]),
         ..Default::default()
     };
 
@@ -36,7 +38,8 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_simple_native("Display DFAs", options, move |ctx, _frame| {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.add(
-                egui::TextEdit::multiline(&mut dfa).font(FontSelection::Style(TextStyle::Monospace))
+                egui::TextEdit::multiline(&mut dfa)
+                    .font(FontSelection::Style(TextStyle::Monospace)),
             );
 
             if ui.button("Render").clicked() {
@@ -46,8 +49,14 @@ fn main() -> Result<(), eframe::Error> {
             egui::Area::new("DFA").show(ui.ctx(), |ui| {
                 let painter = ui.painter();
                 let mut drawer = EguiDrawer::new(painter);
-                if let Some(Ok(dfa)) = dandy::parser::dfa(&dfa_to_render).ok().map(TryInto::try_into) {
-                    dandy_draw::draw_dfa(&dfa, &mut drawer);
+                if let Some(Ok(dfa)) = dandy::parser::dfa(&dfa_to_render)
+                    .ok()
+                    .map(TryInto::try_into)
+                {
+                    let opts = DrawOptions::default()
+                        .with_x_offset(20.0)
+                        .with_y_offset(150.0);
+                    dandy_draw::draw_dfa_with_opts(&dfa, &mut drawer, opts);
                 }
             });
         });

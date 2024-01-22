@@ -1,30 +1,72 @@
-#[cfg(feature = "egui")]
-pub mod egui;
 #[cfg(feature = "canvas")]
 pub mod canvas;
+#[cfg(feature = "egui")]
+pub mod egui;
+pub mod pos2;
 
+use crate::pos2::{pos2, Pos2};
+use dandy::dfa::{Dfa, DfaState};
+use dandy::nfa::{Nfa, NfaState};
+use paste::paste;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::mem;
-use dandy::dfa::{Dfa, DfaState};
-use dandy::nfa::{Nfa, NfaState};
-
-pub fn draw_demo(drawer: &mut impl Drawer) {
-    drawer.start_drawing();
-    drawer.draw_circle((30.0, 30.0), 20.0, 2.0);
-    drawer.draw_circle((30.0, 30.0), 16.0, 2.0);
-    drawer.finish_drawing();
-}
 
 pub trait Drawer {
     fn start_drawing(&mut self);
     fn finish_drawing(&mut self);
-    fn draw_circle(&mut self, pos: (f32, f32), radius: f32, thickness: f32);
-    fn draw_centered_text(&mut self, pos: (f32, f32), text: &str);
-    fn draw_rect(&mut self, upper_left: (f32, f32), size: (f32, f32));
-    fn draw_line(&mut self, from: (f32, f32), to: (f32, f32), thickness: f32);
+    fn draw_circle(&mut self, pos: Pos2, radius: f32, thickness: f32);
+    fn draw_centered_text(&mut self, pos: Pos2, text: &str);
+    fn draw_rect(&mut self, upper_left: Pos2, size: Pos2);
+    fn draw_line(&mut self, from: Pos2, to: Pos2, thickness: f32);
     fn set_color(&mut self, _rgb: [u8; 3]) {}
+}
+
+struct OffsetScaleDrawer<'a, T> {
+    offset: Pos2,
+    scale: Pos2,
+    drawer: &'a mut T,
+}
+
+impl<'a, T: Drawer> Drawer for OffsetScaleDrawer<'a, T> {
+    fn start_drawing(&mut self) {
+        self.drawer.start_drawing()
+    }
+
+    fn finish_drawing(&mut self) {
+        self.drawer.finish_drawing()
+    }
+
+    fn draw_circle(&mut self, pos: Pos2, radius: f32, thickness: f32) {
+        self.drawer.draw_circle(
+            (pos + self.offset) * self.scale,
+            radius * self.scale.x,
+            thickness,
+        )
+    }
+
+    fn draw_centered_text(&mut self, pos: Pos2, text: &str) {
+        self.drawer
+            .draw_centered_text((pos + self.offset) * self.scale, text)
+    }
+
+    fn draw_rect(&mut self, upper_left: Pos2, size: Pos2) {
+        self.drawer
+            .draw_rect((upper_left + self.offset) * self.scale, size)
+    }
+
+    fn draw_line(&mut self, from: Pos2, to: Pos2, thickness: f32) {
+        self.drawer.draw_line(
+            (from + self.offset) * self.scale,
+            (to + self.offset) * self.scale,
+            thickness,
+        )
+    }
+
+    fn set_color(&mut self, rgb: [u8; 3]) {
+        self.drawer.set_color(rgb)
+    }
 }
 
 macro_rules! define_draw_options {
@@ -41,6 +83,15 @@ macro_rules! define_draw_options {
                     $($field,)*
                 }
             }
+
+            paste! {
+                $(
+                pub fn [< with_ $field >](mut self, val: $ty) -> Self {
+                    self.$field = val;
+                    self
+                }
+                )*
+            }
         }
 
         impl Default for $name {
@@ -53,87 +104,139 @@ macro_rules! define_draw_options {
     }
 }
 
-
 define_draw_options! {
     DrawOptions {
+        x_scale: f32 = 1.0,
+        y_scale: f32 = 1.0,
+        x_offset: f32 = 0.0,
+        y_offset: f32 = 0.0,
         center_line_padding: f32 = 20.0,
         circle_radius: f32 = 30.0,
         circle_width: f32 = 2.0,
         accepting_circle_radius: f32 = 25.0,
         accepting_circle_width: f32 = 2.0,
-        init_arrow_length: f32 = 80.0,
-        init_arrow_arms_length: f32 = 30.0,
+        init_arrow_length: f32 = 50.0,
+        init_arrow_arms_length: f32 = 15.0,
         init_arrow_width: f32 = 3.0,
         trans_arrow_arms_length: f32 = 5.0,
         trans_line_width: f32 = 3.0,
-        from_line_offset: f32 = 10.0,
-        to_line_offset: f32 = 10.0,
+        from_line_offset: f32 = 15.0,
+        to_line_offset: f32 = 15.0,
         floor_height: f32 = 25.0,
         text_margin: f32 = 15.0,
         line_circle_margin: f32 = 10.0,
         end_arrow: bool = true,
         middle_arrow: bool = true,
+        text_color: [u8; 3] = [255, 255, 255],
+        circle_color: [u8; 3] = [150, 255, 255],
+        line_color: [u8; 3] = [0, 255, 255],
     }
 }
 
 pub fn draw_dfa(dfa: &Dfa, drawer: &mut impl Drawer) {
-    let states = dfa.states().iter().map(Into::into).collect::<Vec<State>>();
-    let arrows = dfa_to_arrows(dfa);
-    draw(states, arrows, drawer, DrawOptions::default())
+    draw_dfa_with_opts(dfa, drawer, DrawOptions::default())
 }
 
-fn draw<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>, drawer: &mut impl Drawer, opts: DrawOptions) {
+pub fn draw_dfa_with_opts(dfa: &Dfa, drawer: &mut impl Drawer, opts: DrawOptions) {
+    let states = dfa.states().iter().map(Into::into).collect::<Vec<State>>();
+    let arrows = dfa_to_arrows(dfa);
+    draw(states, arrows, drawer, opts)
+}
+
+pub fn draw_nfa(nfa: &Nfa, drawer: &mut impl Drawer) {
+    draw_nfa_with_opts(nfa, drawer, DrawOptions::default())
+}
+
+pub fn draw_nfa_with_opts(nfa: &Nfa, drawer: &mut impl Drawer, opts: DrawOptions) {
+    let states = nfa.states().iter().map(Into::into).collect::<Vec<State>>();
+    let arrows = nfa_to_arrows(nfa);
+    draw(states, arrows, drawer, opts)
+}
+
+fn draw<'a>(
+    states: Vec<State<'a>>,
+    arrows: Vec<Arrow<'a>>,
+    drawer: &mut impl Drawer,
+    opts: DrawOptions,
+) {
+    let offset = pos2(opts.x_offset, opts.y_offset);
+    let scale = pos2(opts.x_scale, opts.y_scale);
+    let mut drawer = OffsetScaleDrawer {
+        offset,
+        scale,
+        drawer,
+    };
+
     let arrows = group_arrows(arrows);
     let (arrows, levels) = place_arrows(arrows);
-    let levels = levels + 1;
 
     let x_pos = |idx: usize| -> f32 {
-        opts.init_arrow_length + opts.center_line_padding + opts.circle_radius
+        opts.init_arrow_length
+            + opts.center_line_padding
+            + opts.circle_radius
             + (opts.circle_radius * 2.0 + opts.center_line_padding) * idx as f32
     };
 
-    let x_from_pos = |idx: usize| -> f32 {
-        x_pos(idx) + opts.from_line_offset
-    };
+    let x_from_pos = |idx: usize| -> f32 { x_pos(idx) + opts.from_line_offset };
 
-    let x_to_pos = |idx: usize| -> f32 {
-        x_pos(idx) - opts.to_line_offset
-    };
+    let x_to_pos = |idx: usize| -> f32 { x_pos(idx) - opts.to_line_offset };
 
-    let line_baseline = levels as f32 * opts.floor_height;
-    //let line_baseline = 0.0;
+    let line_baseline = (levels + 1) as f32 * opts.floor_height;
     let circle_center = line_baseline + opts.line_circle_margin + opts.circle_radius;
 
     // draw arrow
-    drawer.draw_line((0.0, circle_center), (opts.init_arrow_length, circle_center), opts.init_arrow_width);
-    drawer.draw_line((opts.init_arrow_length, circle_center), (opts.init_arrow_length - opts.init_arrow_arms_length, circle_center - opts.init_arrow_arms_length), opts.init_arrow_width);
-    drawer.draw_line((opts.init_arrow_length, circle_center), (opts.init_arrow_length - opts.init_arrow_arms_length, circle_center + opts.init_arrow_arms_length), opts.init_arrow_width);
+    {
+        drawer.set_color(opts.line_color);
+        let arrow_base = pos2(opts.init_arrow_length, circle_center);
+        drawer.draw_line(pos2(0.0, circle_center), arrow_base, opts.init_arrow_width);
+        drawer.draw_line(
+            pos2(opts.init_arrow_length, circle_center),
+            arrow_base - pos2(opts.init_arrow_arms_length, opts.init_arrow_arms_length),
+            opts.init_arrow_width,
+        );
+        drawer.draw_line(
+            pos2(opts.init_arrow_length, circle_center),
+            arrow_base - pos2(opts.init_arrow_arms_length, -opts.init_arrow_arms_length),
+            opts.init_arrow_width,
+        );
+    }
 
     // draw states
     for (idx, state) in states.iter().enumerate() {
-        drawer.draw_circle((x_pos(idx), circle_center), opts.circle_radius, opts.circle_width);
+        let cc = pos2(x_pos(idx), circle_center);
+        drawer.set_color(opts.circle_color);
+        drawer.draw_circle(cc, opts.circle_radius, opts.circle_width);
         if state.accepting {
-            drawer.draw_circle((x_pos(idx), circle_center), opts.accepting_circle_radius, opts.accepting_circle_width);
+            drawer.draw_circle(
+                cc,
+                opts.accepting_circle_radius,
+                opts.accepting_circle_width,
+            );
         }
-        drawer.draw_centered_text((x_pos(idx), circle_center), state.name);
+        drawer.set_color(opts.text_color);
+        drawer.draw_centered_text(cc, state.name);
     }
 
     for arrow in arrows {
-        let line_height = opts.floor_height * (levels - arrow.level - 1) as f32;
-        drawer.draw_line(
-            (x_from_pos(arrow.arrow.left), line_baseline),
-            (x_from_pos(arrow.arrow.left), line_height),
-            opts.trans_line_width);
-        drawer.draw_line(
-            (x_to_pos(arrow.arrow.right), line_baseline),
-            (x_to_pos(arrow.arrow.right), line_height),
-            opts.trans_line_width);
-        drawer.draw_line(
-            (x_from_pos(arrow.arrow.left), line_height),
-            (x_to_pos(arrow.arrow.right), line_height),
-            opts.trans_line_width);
-        let middle = (x_from_pos(arrow.arrow.left) + x_to_pos(arrow.arrow.right)) / 2.0;
+        drawer.set_color(opts.line_color);
+        let line_height = opts.floor_height * (levels - arrow.level) as f32;
 
+        drawer.draw_line(
+            pos2(x_from_pos(arrow.arrow.left), line_baseline),
+            pos2(x_from_pos(arrow.arrow.left), line_height),
+            opts.trans_line_width,
+        );
+        drawer.draw_line(
+            pos2(x_to_pos(arrow.arrow.right), line_baseline),
+            pos2(x_to_pos(arrow.arrow.right), line_height),
+            opts.trans_line_width,
+        );
+        drawer.draw_line(
+            pos2(x_from_pos(arrow.arrow.left), line_height),
+            pos2(x_to_pos(arrow.arrow.right), line_height),
+            opts.trans_line_width,
+        );
+        let middle = (x_from_pos(arrow.arrow.left) + x_to_pos(arrow.arrow.right)) / 2.0;
 
         if opts.middle_arrow {
             let mul = if arrow.arrow.direction == Direction::Left {
@@ -142,8 +245,22 @@ fn draw<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>, drawer: &mut impl Dr
                 -1.0
             };
             let middle = middle - opts.trans_arrow_arms_length * mul * 0.5;
-            drawer.draw_line((middle, line_height), (middle + mul * opts.trans_arrow_arms_length, line_height + opts.trans_arrow_arms_length), opts.trans_line_width);
-            drawer.draw_line((middle, line_height), (middle + mul * opts.trans_arrow_arms_length, line_height - opts.trans_arrow_arms_length), opts.trans_line_width);
+            drawer.draw_line(
+                pos2(middle, line_height),
+                pos2(
+                    middle + mul * opts.trans_arrow_arms_length,
+                    line_height + opts.trans_arrow_arms_length,
+                ),
+                opts.trans_line_width,
+            );
+            drawer.draw_line(
+                pos2(middle, line_height),
+                pos2(
+                    middle + mul * opts.trans_arrow_arms_length,
+                    line_height - opts.trans_arrow_arms_length,
+                ),
+                opts.trans_line_width,
+            );
         }
 
         if opts.end_arrow {
@@ -152,14 +269,26 @@ fn draw<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>, drawer: &mut impl Dr
             } else {
                 (x_from_pos(arrow.arrow.left), line_baseline)
             };
-            drawer.draw_line((x, y), (x - opts.trans_arrow_arms_length, y - opts.trans_arrow_arms_length), opts.trans_line_width);
-            drawer.draw_line((x, y), (x + opts.trans_arrow_arms_length, y - opts.trans_arrow_arms_length), opts.trans_line_width);
+            let base = pos2(x, y);
+            drawer.draw_line(
+                base,
+                base - pos2(opts.trans_arrow_arms_length, opts.trans_arrow_arms_length),
+                opts.trans_line_width,
+            );
+            drawer.draw_line(
+                pos2(x, y),
+                base - pos2(-opts.trans_arrow_arms_length, opts.trans_arrow_arms_length),
+                opts.trans_line_width,
+            );
         }
 
-        drawer.draw_centered_text((middle, line_height - opts.text_margin), &arrow.arrow.label());
+        drawer.set_color(opts.text_color);
+        drawer.draw_centered_text(
+            pos2(middle, line_height - opts.text_margin),
+            &arrow.arrow.label(),
+        );
     }
 }
-
 
 pub fn dfa_ascii_art(dfa: &Dfa) -> String {
     let states = dfa.states().iter().map(Into::into).collect::<Vec<State>>();
@@ -172,7 +301,6 @@ pub fn nfa_ascii_art(nfa: &Nfa) -> String {
     let arrows = nfa_to_arrows(nfa);
     ascii_art(states, arrows)
 }
-
 
 fn ascii_art<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>) -> String {
     let widest_state_name = states.iter().map(|s| s.name.chars().count()).max().unwrap();
@@ -204,13 +332,13 @@ fn ascii_art<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>) -> String {
 
         let mut acc = String::with_capacity(art_width);
         acc.push_str("-> ");
-        states.iter().for_each(|state|
+        states.iter().for_each(|state| {
             if state.accepting {
                 acc.push_str(&format!("(( {} )) ", pad(state.name, widest_state_name)))
             } else {
                 acc.push_str(&format!("(  {}  ) ", pad(state.name, widest_state_name)))
             }
-        );
+        });
         acc
     };
 
@@ -225,7 +353,8 @@ fn ascii_art<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>) -> String {
             unsafe { bot_line.as_bytes_mut()[bar] = b'|' }
         });
 
-        arrows.iter()
+        arrows
+            .iter()
             .filter(|arrow| arrow.level == level)
             .for_each(|arrow| {
                 let (leftmost, rightmost) = if arrow.arrow.direction == Direction::Spot {
@@ -235,26 +364,19 @@ fn ascii_art<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>) -> String {
                 };
 
                 // SAFETY: valid utf8 since only ascii is used and string is initially only ascii
-                for x in leftmost..=rightmost
-                {
+                for x in leftmost..=rightmost {
                     unsafe { top_line.as_bytes_mut()[x] = b'-' }
                 }
                 match arrow.arrow.direction {
                     Direction::Left => unsafe {
-                        top_line.as_bytes_mut()[
-                            left_x_idx(arrow.arrow.right) - 1
-                            ] = b'<'
+                        top_line.as_bytes_mut()[left_x_idx(arrow.arrow.right) - 1] = b'<'
                     },
                     Direction::Right => unsafe {
-                        top_line.as_bytes_mut()[
-                            right_x_idx(arrow.arrow.left) + 2
-                            ] = b'>'
+                        top_line.as_bytes_mut()[right_x_idx(arrow.arrow.left) + 2] = b'>'
                     },
                     Direction::Spot => unsafe {
-                        top_line.as_bytes_mut()[
-                            left_x_idx(arrow.arrow.left) + 1
-                            ] = b'>'
-                    }
+                        top_line.as_bytes_mut()[left_x_idx(arrow.arrow.left) + 1] = b'>'
+                    },
                 }
 
                 bars.insert(right_x_idx(arrow.arrow.left));
@@ -266,7 +388,9 @@ fn ascii_art<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>) -> String {
         // * make sure all shapes have been drawn out
         // * to draw the labels "on top" of those shapes
         // * to be able to disable label drawing
-        arrows.iter().filter(|arrow| arrow.level == level)
+        arrows
+            .iter()
+            .filter(|arrow| arrow.level == level)
             .for_each(|arrow| {
                 // copy label
                 if arrow.arrow.left != arrow.arrow.right {
@@ -301,19 +425,40 @@ fn ascii_art<'a>(states: Vec<State<'a>>, arrows: Vec<Arrow<'a>>) -> String {
 }
 
 fn dfa_to_arrows(dfa: &Dfa) -> Vec<Arrow> {
-    dfa.states().iter().enumerate().flat_map(|(from, state)|
-        state.transitions().iter().enumerate().map(move |(idx, to)| Arrow::new(from, *to, &dfa.alphabet()[idx]))
-    ).collect()
+    dfa.states()
+        .iter()
+        .enumerate()
+        .flat_map(|(from, state)| {
+            state
+                .transitions()
+                .iter()
+                .enumerate()
+                .map(move |(idx, to)| Arrow::new(from, *to, &dfa.alphabet()[idx]))
+        })
+        .collect()
 }
 
 fn nfa_to_arrows(nfa: &Nfa) -> Vec<Arrow> {
-    nfa.states().iter().enumerate().flat_map(|(from, state)|
-        state.transitions().iter().enumerate().flat_map(move |(idx, tos)|
-            tos.iter().map(move |to| Arrow::new(from, *to, &nfa.alphabet()[idx]))
-        ).chain(state.epsilon_transitions().iter().map(move |to|
-            Arrow::new(from, *to, "ε")
-        ))
-    ).collect()
+    nfa.states()
+        .iter()
+        .enumerate()
+        .flat_map(|(from, state)| {
+            state
+                .transitions()
+                .iter()
+                .enumerate()
+                .flat_map(move |(idx, tos)| {
+                    tos.iter()
+                        .map(move |to| Arrow::new(from, *to, &nfa.alphabet()[idx]))
+                })
+                .chain(
+                    state
+                        .epsilon_transitions()
+                        .iter()
+                        .map(move |to| Arrow::new(from, *to, "ε")),
+                )
+        })
+        .collect()
 }
 
 fn place_arrows<'a, T: ArrowLike<'a>>(arrows: Vec<T>) -> (Vec<PlacedArrow<'a, T>>, usize) {
@@ -360,14 +505,13 @@ fn group_arrows(arrows: Vec<Arrow>) -> Vec<GroupedArrow> {
             map
         })
         .drain()
-        .map(|((left, right, direction), arrows)|
-            GroupedArrow {
-                left,
-                right,
-                direction,
-                labels: arrows.into_iter().map(|arrow| arrow.label).collect(),
-            }
-        ).collect()
+        .map(|((left, right, direction), arrows)| GroupedArrow {
+            left,
+            right,
+            direction,
+            labels: arrows.into_iter().map(|arrow| arrow.label).collect(),
+        })
+        .collect()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -398,27 +542,24 @@ impl<'a> Arrow<'a> {
         use std::cmp::Ordering::*;
         use Direction::*;
         match from.cmp(&to) {
-            Less =>
-                Arrow {
-                    left: from,
-                    right: to,
-                    direction: Right,
-                    label,
-                },
-            Equal =>
-                Arrow {
-                    left: from,
-                    right: to,
-                    direction: Spot,
-                    label,
-                },
-            Greater =>
-                Arrow {
-                    left: to,
-                    right: from,
-                    direction: Left,
-                    label,
-                },
+            Less => Arrow {
+                left: from,
+                right: to,
+                direction: Right,
+                label,
+            },
+            Equal => Arrow {
+                left: from,
+                right: to,
+                direction: Spot,
+                label,
+            },
+            Greater => Arrow {
+                left: to,
+                right: from,
+                direction: Left,
+                label,
+            },
         }
     }
 }
