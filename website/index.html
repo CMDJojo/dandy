@@ -109,6 +109,35 @@ the DFA will appear here
 <br>
 <br>
 
+Minimize DFA here!
+<br>
+
+<label>
+    NFA:
+    <br>
+    <textarea id="dfa-minimize" rows="10">
+      a b c
+→ * x z x y
+  * y y y y
+    z y a a
+    a y z a
+    </textarea>
+</label>
+<br>
+<button id="dfa-minimize-btn">Minimize!</button>
+<br>
+<label>
+    Result:
+    <br>
+    <textarea id="dfa-minimize-out" rows="10" readonly>
+Minimize a DFA and the
+result will appear here
+    </textarea>
+</label>
+
+<br>
+<br>
+
 Visualize NFA here!
 <br>
 
@@ -140,6 +169,7 @@ Visualize NFA here!
         dfa_to_nfa,
         dfa_to_table,
         draw_dfa,
+        minimize_dfa,
         load_nfa,
         check_nfa_eq,
         delete_nfa,
@@ -154,6 +184,7 @@ Visualize NFA here!
         document.getElementById("nfa-eq-check").onclick = checkNfaEq;
         document.getElementById("nfa-to-dfa-btn").onclick = nfaToDfa;
         document.getElementById("nfa-visualize-btn").onclick = visualizeNfa;
+        document.getElementById("dfa-minimize-btn").onclick = minimizeDfa;
     }
 
     function checkDfaEq() {
@@ -237,6 +268,19 @@ Visualize NFA here!
         }
         draw_nfa(nfa, "nfa-visualization");
     }
+
+    function minimizeDfa() {
+        let dfa = 0;
+        try {
+            dfa = load_dfa(document.getElementById("dfa-minimize").value);
+            document.getElementById("dfa-minimize-btn").innerText = "Minimize!";
+            minimize_dfa(dfa);
+            document.getElementById("dfa-minimize-out").value = dfa_to_table(dfa).replace("\n", "\r\n");
+        } catch (e) {
+            document.getElementById("dfa-minimize-btn").innerText = e;
+        }
+    }
+
 
     run();
 </script>

@@ -41,8 +41,14 @@ extern "C" {
     fn log(s: &str);
 }
 
+#[allow(unused_macros)]
 macro_rules! console_log {
     ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[wasm_bindgen]
+pub fn minimize_dfa(dfa: usize) -> bool {
+    DFA_MAP.with_borrow_mut(|map| map.get_mut(&dfa).map(|dfa| dfa.minimize()).is_some())
 }
 
 #[wasm_bindgen]
