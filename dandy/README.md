@@ -24,9 +24,9 @@ fn main() {
     // Second step checks the existence of all mentioned states and
     // the existence of an initial state
     let dfa: Dfa = parsed_dfa.try_into().unwrap();
-    assert!(dfa.accepts(&vec!["a", "b", "c", "c", "a"]));
-    assert!(dfa.accepts(&vec!["c", "b", "a"]));
-    assert!(!dfa.accepts(&vec!["a", "b", "b", "c"]));
+    assert!(dfa.accepts(&["a", "b", "c", "c", "a"]));
+    assert!(dfa.accepts(&["c", "b", "a"]));
+    assert!(!dfa.accepts(&["a", "b", "b", "c"]));
 
     let equivalent_dfa = "
         a b c
