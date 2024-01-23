@@ -3,7 +3,7 @@ use crate::parser::{ParsedDfa, ParsedDfaState};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum DfaParseError<'a> {
     #[error("Wrong number of transitions for state '{0}': has {1} expected {2}")]
     WrongNumberOfTransitions(&'a str, usize, usize),

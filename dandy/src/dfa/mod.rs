@@ -1,3 +1,51 @@
+//! # Deterministic finite automaton
+//! The DFA module includes the [Dfa] struct which represents a
+//! [Deterministic finite automaton](https://en.wikipedia.org/wiki/Deterministic_finite_automaton). Currently,
+//! the only two ways to create such an instance is by [converting a NFA to a DFA](Nfa::to_dfa) or by parsing from a
+//! string.
+//!
+//! ## Parsing
+//! You may parse a state transition table in text form to a DFA. The parsing is done in two steps, the first one
+//! just parsing into a [ParsedDfa](crate::parser::ParsedDfa) and the second one checking the invariant of that
+//! parsed DFA and converting it into a [Dfa]:
+//! ```
+//! use dandy::dfa::parse::DfaParseError;
+//! use crate::dandy::dfa::{Dfa, parse};
+//!
+//! fn parse() {
+//!     // A DFA with initial state s1, two accepting states s2 and s4,
+//!     // accepting all strings with an odd number of a:s
+//!     let input = "
+//!                a  b
+//!         ->  s1 s2 s1
+//!           * s2 s3 s1
+//!             s3 s4 s1
+//!           * s4 s1 s1
+//!     ";
+//!     // Parsing the DFA
+//!     let parsed_dfa = dandy::parser::dfa(input).unwrap();
+//!     // Checking invariants
+//!     let mut dfa: Dfa = parsed_dfa.try_into().unwrap();
+//!     assert!(dfa.accepts(&["a", "b", "b"]));  // odd number of a:s
+//!     assert!(!dfa.accepts(&["a", "a", "b"])); // even number of a:s
+//!
+//!     // We see that states s1 and s3 are non-distinguishable, and that states s2 and s4 are as well.
+//!     // Minimizing this DFA will thus result in a DFA with two states
+//!     dfa.minimize();
+//!     assert_eq!(dfa.states().len(), 2);
+//!
+//!     let dfa_without_initial_state = "
+//!             a b
+//!         * x y x
+//!           y x y
+//!     ";
+//!     // A DFA must have an initial state (but it doesn't have to have any accepting states),
+//!     // so the invariant should not pass
+//!     let parsed_dfa = dandy::parser::dfa(dfa_without_initial_state).unwrap();
+//!     let validation: Result<Dfa, DfaParseError<'_>> = parsed_dfa.try_into();
+//!     assert_eq!(validation.unwrap_err(), DfaParseError::MissingInitialState);
+//! }
+//! ```
 use crate::dfa::eval::DfaEvaluator;
 use crate::nfa::{Nfa, NfaState};
 use crate::table::Table;
@@ -94,6 +142,9 @@ impl Dfa {
             .collect::<HashMap<_, _>>();
         let map = |idx| mapper.get(&idx).copied();
         self.remap_transitions(map);
+        if let Some(new_initial) = map(self.initial_state) {
+            self.initial_state = new_initial;
+        }
         let to_remove = mapper.into_iter().map(|(old, _)| old).collect();
         self.remove_states(to_remove);
     }
@@ -211,6 +262,10 @@ impl Dfa {
         let mut old_state_idx = (0..self.states.len()).collect::<Vec<_>>();
 
         to_remove.sort();
+        assert!(
+            to_remove.binary_search(&self.initial_state).is_err(),
+            "Cannot remove initial state"
+        );
         to_remove.iter().rev().for_each(|&idx| {
             self.states.remove(idx);
             old_state_idx.remove(idx);

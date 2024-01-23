@@ -5,7 +5,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Dandy is a Rust library for DFA, NFA and ε-NFA automata, strongly based on a text-based file format for automata.
-Note that this is very much work-in-progress.
 
 ## Usage
 
@@ -104,7 +103,12 @@ very few operations implemented at the moment.
 This library currently supports:
 
 * Parsing and validating DFAs
-* Parsing and validating NFAs with and without epsilon moves
+* Parsing and validating NFAs (with and without epsilon moves)
 * Generating a table suitable for re-parsing of DFAs and NFAs
 * Converting DFAs to NFAs, and NFAs to DFAs
 * Checking whether two DFAs or two NFAs are equivalent
+* Checking if a string is accepted by a DFA or NFA
+* Step-by-step evaluation of a string
+* Identifying and removing unreachable states from a DFA
+* Identifying and merging non-distinguishable states from a DFA
+* Minimizing a DFA (by executing the two above-mentioned steps)
