@@ -1,7 +1,7 @@
 use crate::dfa::eval::DfaEvaluator;
 use crate::nfa::{Nfa, NfaState};
 use crate::table::Table;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub mod eval;
 pub mod parse;
@@ -71,6 +71,162 @@ impl From<Dfa> for Nfa {
 }
 
 impl Dfa {
+    /// Minimizes this DFA by first removing all unreachable states and then merging non-distinguishable states
+    pub fn minimize(&mut self) {
+        self.remove_unreachable_states();
+        self.merge_nondistinguishable_states();
+    }
+
+    /// Merges the non-distinguishable states of this DFA such that every set of multiple non-distinguishable states
+    /// become just one. Which of multiple non-distinguishable states is left over is non-deterministic
+    pub fn merge_nondistinguishable_states(&mut self) {
+        let mapper = self
+            .state_equivalence_classes_idx()
+            .into_iter()
+            .flat_map(|set| {
+                debug_assert!(!set.is_empty(), "Should not have empty equivalence classes");
+                let mut iter = set.into_iter();
+                let new = iter.next();
+                // safety: iter.map is lazy, so body is only executed if there are elements,
+                // which means new must be non-optional
+                iter.map(move |old| (old, unsafe { new.unwrap_unchecked() }))
+            })
+            .collect::<HashMap<_, _>>();
+        let map = |idx| mapper.get(&idx).copied();
+        self.remap_transitions(map);
+        let to_remove = mapper.into_iter().map(|(old, _)| old).collect();
+        self.remove_states(to_remove);
+    }
+
+    /// Gives the equivalence classes of the states of this DFA, which is the sets of non-distinguishable states
+    pub fn state_equivalence_classes(&self) -> Vec<Vec<&DfaState>> {
+        self.state_equivalence_classes_idx()
+            .into_iter()
+            .map(|class| {
+                class
+                    .into_iter()
+                    .map(|state| &self.states[state])
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// Gives the equivalence classes of the states of this DFA, which is the sets of non-distinguishable states, by
+    /// their indices
+    pub fn state_equivalence_classes_idx(&self) -> Vec<HashSet<usize>> {
+        let (finals, nonfinals) =
+            (0..self.states.len()).partition(|&idx| self.states[idx].accepting);
+        let mut p: Vec<HashSet<_>> = vec![finals, nonfinals];
+        let mut w = p.clone();
+
+        // Hopcroft's algorithm
+        while let Some(a) = w.pop() {
+            for c in 0..self.alphabet.len() {
+                let x: HashSet<usize> = self
+                    .states
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| a.contains(&s.transitions[c]))
+                    .map(|(i, _)| i)
+                    .collect();
+                p = p
+                    .into_iter()
+                    .map(|y| {
+                        (
+                            x.intersection(&y).copied().collect::<HashSet<_>>(),
+                            y.difference(&x).copied().collect::<HashSet<_>>(),
+                            y,
+                        )
+                    })
+                    .flat_map(|(inters, diff, y)| {
+                        if !inters.is_empty() && !diff.is_empty() {
+                            if let Some(idx) = w.iter().position(|hs| hs == &y) {
+                                w.swap_remove(idx);
+                                w.push(inters.clone());
+                                w.push(diff.clone());
+                            } else if inters.len() <= diff.len() {
+                                w.push(inters.clone());
+                            } else {
+                                w.push(diff.clone());
+                            }
+                            // ugly to allocate vec but fck monomorphism and static dispatch
+                            // wont work with slices or iter::once or smth
+                            vec![inters, diff].into_iter()
+                        } else {
+                            vec![y].into_iter()
+                        }
+                    })
+                    .collect()
+            }
+        }
+        p
+    }
+
+    /// Removes the unreachable states of this automata
+    pub fn remove_unreachable_states(&mut self) {
+        let states = self.unreachable_state_idx().into_iter().collect();
+        self.remove_states(states);
+    }
+
+    /// Finds the unreachable states, that is, all states that cannot be reached by any input to the automata
+    pub fn unreachable_states(&self) -> Vec<&DfaState> {
+        self.unreachable_state_idx()
+            .into_iter()
+            .map(|idx| &self.states[idx])
+            .collect()
+    }
+
+    /// Finds the unreachable states, that is, all states that cannot be reached by any input to the automata, and
+    /// returns them as indices
+    pub fn unreachable_state_idx(&self) -> HashSet<usize> {
+        let mut unreachables = (0..self.states.len()).collect::<HashSet<_>>();
+        unreachables.remove(&self.initial_state);
+        let mut new_states = HashSet::from([self.initial_state]);
+        while !new_states.is_empty() {
+            new_states = new_states
+                .drain()
+                .flat_map(|state| self.states[state].transitions.iter().copied())
+                .filter(|state| unreachables.remove(state))
+                .collect();
+        }
+        unreachables
+    }
+
+    /// Remaps the transitions so that any transition to n gets mapped to mapper(n) (if any, otherwise n is preserved)
+    fn remap_transitions(&mut self, mapper: impl Fn(usize) -> Option<usize>) {
+        self.states.iter_mut().for_each(|state| {
+            state
+                .transitions
+                .iter_mut()
+                .for_each(|trans| *trans = mapper(*trans).unwrap_or(*trans))
+        })
+    }
+
+    /// This function removes the states with indices in the vector from this DFA, changing the transition tables
+    /// of the remaining states to the new state indices. There should not be any transitions to any of the states
+    /// that are to be removed. If there is, transitions may be undefined after this call. If debug_assertions is
+    /// enabled, such errors would cause a panic here, otherwise they would not be and the DFA might panic at a later
+    /// stage
+    fn remove_states(&mut self, mut to_remove: Vec<usize>) {
+        let mut old_state_idx = (0..self.states.len()).collect::<Vec<_>>();
+
+        to_remove.sort();
+        to_remove.iter().rev().for_each(|&idx| {
+            self.states.remove(idx);
+            old_state_idx.remove(idx);
+        });
+
+        let map = |idx| {
+            let res = old_state_idx.binary_search(&idx);
+            if cfg!(debug_assertions) {
+                Some(res.expect("No transitions to removed state"))
+            } else {
+                res.ok()
+            }
+        };
+        self.remap_transitions(map);
+    }
+
     /// Converts this DFA to a NFA by simply converting each state to a NFA state. All state names
     /// are kept. This is a cheap operation, involving no clones but some vector allocations due to
     /// the vectors required by NFA.
