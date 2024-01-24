@@ -186,6 +186,7 @@ fn draw<'a>(
 
     drawer.start_drawing();
     // draw arrow
+    // FIXME: This assumes first is initial, which isn't always the case
     {
         drawer.set_color(opts.line_color);
         let arrow_base = pos2(opts.init_arrow_length, circle_center);
@@ -214,6 +215,26 @@ fn draw<'a>(
                 opts.accepting_circle_width,
             );
         }
+        if state.initial {
+            drawer.set_color(opts.line_color);
+            let start = cc + Pos2::y(opts.circle_radius + opts.center_line_padding);
+            drawer.draw_line(
+                start,
+                start + Pos2::y(opts.init_arrow_length),
+                opts.init_arrow_width,
+            );
+            drawer.draw_line(
+                start,
+                start + pos2(opts.init_arrow_arms_length, opts.init_arrow_arms_length),
+                opts.init_arrow_width,
+            );
+            drawer.draw_line(
+                start,
+                start + pos2(-opts.init_arrow_arms_length, opts.init_arrow_arms_length),
+                opts.init_arrow_width,
+            );
+        }
+
         drawer.set_color(opts.text_color);
         drawer.draw_centered_text(cc, state.name);
     }
