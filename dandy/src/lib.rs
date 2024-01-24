@@ -108,10 +108,13 @@
 //! * [Identifying and removing unreachable states from a DFA](dfa::Dfa::unreachable_states)
 //! * [Identifying and merging non-distinguishable states from a DFA](dfa::Dfa::state_equivalence_classes)
 //! * [Minimizing a DFA](dfa::Dfa::minimize) (by executing the two above-mentioned steps)
+//! * [Parsing regular expressions](parser::regex)
+//! * [Converting regular expressions to NFAs](regex::Regex::to_nfa)
 
 pub mod dfa;
 pub mod nfa;
 pub mod parser;
+pub mod regex;
 mod table;
 
 #[cfg(test)]
@@ -121,11 +124,11 @@ mod tests {
     #[test]
     fn test_subset_construction() {
         let dfa_source = include_str!("../tests/test_files/eq_to_nfa1.dfa");
-        let parsed_dfa = parser::full_dfa(dfa_source).unwrap().1;
+        let parsed_dfa = parser::dfa(dfa_source).unwrap();
         let dfa: dfa::Dfa = parsed_dfa.try_into().unwrap();
 
         let nfa_source = include_str!("../tests/test_files/nfa1.nfa");
-        let parsed_nfa = parser::full_nfa(nfa_source).unwrap().1;
+        let parsed_nfa = parser::nfa(nfa_source).unwrap();
         let nfa: nfa::Nfa = parsed_nfa.try_into().unwrap();
 
         let converted = nfa.to_dfa();
