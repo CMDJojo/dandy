@@ -15,7 +15,7 @@ Check equivalence of DFA here!
 <label>
     DFA 1:
     <br>
-    <textarea id="dfa-eq-dfa1" rows="10">
+    <textarea id="dfa-eq-dfa1" rows="10" cols="30">
        a  b  c
 → * s₀ s₁ s₀ s₂
     s₁ s₂ s₁ s₁
@@ -26,7 +26,7 @@ Check equivalence of DFA here!
 <label>
     DFA 2:
     <br>
-    <textarea id="dfa-eq-dfa2" rows="10">
+    <textarea id="dfa-eq-dfa2" rows="10" cols="30">
     a b c
 → * x z x y
   * y y y y
@@ -47,7 +47,7 @@ Check equivalence of NFA here!
 <label>
     NFA 1:
     <br>
-    <textarea id="nfa-eq-nfa1" rows="10">
+    <textarea id="nfa-eq-nfa1" rows="10" cols="30">
      a    b    c
 → s₀ {s₀} {s₁} {s₀ s₂}
   s₁ {}   {s₃} {s₂}
@@ -60,7 +60,7 @@ Check equivalence of NFA here!
 <label>
     NFA 2:
     <br>
-    <textarea id="nfa-eq-nfa2" rows="10">
+    <textarea id="nfa-eq-nfa2" rows="10" cols="30">
      ε    a       b
 → s₀ {}   {s₁}    {s₀ s₂}
   s₁ {s₂} {s₄}    {s₃}
@@ -84,7 +84,7 @@ Convert NFA to DFA here!
 <label>
     NFA:
     <br>
-    <textarea id="nfa-to-dfa" rows="10">
+    <textarea id="nfa-to-dfa" rows="10" cols="30">
      ε    a       b
 → s₀ {}   {s₁}    {s₀ s₂}
   s₁ {s₂} {s₄}    {s₃}
@@ -100,7 +100,7 @@ Convert NFA to DFA here!
 <label>
     Result:
     <br>
-    <textarea id="nfa-to-dfa-out" rows="10" readonly>
+    <textarea id="nfa-to-dfa-out" rows="10" cols="30" readonly>
 Convert an NFA and
 the DFA will appear here
     </textarea>
@@ -115,7 +115,7 @@ Minimize DFA here!
 <label>
     NFA:
     <br>
-    <textarea id="dfa-minimize" rows="10">
+    <textarea id="dfa-minimize" rows="10" cols="30">
       a b c
 → * x z x y
   * y y y y
@@ -129,12 +129,36 @@ Minimize DFA here!
 <label>
     Result:
     <br>
-    <textarea id="dfa-minimize-out" rows="10" readonly>
+    <textarea id="dfa-minimize-out" rows="10" cols="30" readonly>
 Minimize a DFA and the
 result will appear here
     </textarea>
 </label>
 
+<br>
+<br>
+
+Convert Regex to NFA here!
+<br>
+
+<label>
+    NFA:
+    <br>
+    <textarea id="regex-to-nfa" rows="1" cols="30">
+(ab)+c
+    </textarea>
+</label>
+<br>
+<button id="regex-to-nfa-btn">Convert!</button>
+<br>
+<label>
+    Result:
+    <br>
+    <textarea id="regex-to-nfa-out" rows="15" cols="30" readonly>
+Convert a Regex and the
+result will appear here
+    </textarea>
+</label>
 <br>
 <br>
 
@@ -144,7 +168,7 @@ Visualize NFA here!
 <label>
     NFA:
     <br>
-    <textarea id="nfa-visualize" rows="10">
+    <textarea id="nfa-visualize" rows="10" cols="30">
      ε    a       b
 → s₀ {}   {s₁}    {s₀ s₂}
   s₁ {s₂} {s₄}    {s₃}
@@ -175,7 +199,10 @@ Visualize NFA here!
         delete_nfa,
         nfa_to_dfa,
         nfa_to_table,
-        draw_nfa
+        draw_nfa,
+        load_regex,
+        delete_regex,
+        regex_to_nfa
     } from './web_bindings/dandy_wasm.js';
 
     async function run() {
@@ -185,6 +212,7 @@ Visualize NFA here!
         document.getElementById("nfa-to-dfa-btn").onclick = nfaToDfa;
         document.getElementById("nfa-visualize-btn").onclick = visualizeNfa;
         document.getElementById("dfa-minimize-btn").onclick = minimizeDfa;
+        document.getElementById("regex-to-nfa-btn").onclick = regexToNfa;
     }
 
     function checkDfaEq() {
@@ -281,6 +309,16 @@ Visualize NFA here!
         }
     }
 
+    function regexToNfa() {
+        try {
+            let regex = load_regex(document.getElementById("regex-to-nfa").value);
+            document.getElementById("regex-to-nfa-btn").innerText = "Convert!";
+            let nfa = regex_to_nfa(regex);
+            document.getElementById("regex-to-nfa-out").value = nfa_to_table(nfa).replace("\n", "\r\n");
+        } catch (e) {
+            document.getElementById("regex-to-nfa-btn").innerText = e;
+        }
+    }
 
     run();
 </script>

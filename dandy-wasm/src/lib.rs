@@ -21,6 +21,7 @@ use dandy::dfa::parse::DfaParseError;
 use dandy::dfa::Dfa;
 use dandy::nfa::parse::NfaParseError;
 use dandy::nfa::Nfa;
+use dandy::regex::Regex;
 use dandy_draw::canvas::CanvasDrawer;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -32,6 +33,7 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 thread_local! {
     static DFA_MAP: RefCell<HashMap<usize, Dfa>> = RefCell::default();
     static NFA_MAP: RefCell<HashMap<usize, Nfa>> = RefCell::default();
+    static REGEX_MAP: RefCell<HashMap<usize, Regex>> = RefCell::default();
     static KEYGEN: RefCell<RangeFrom<usize>> = RefCell::from(1usize..);
 }
 
@@ -44,6 +46,11 @@ extern "C" {
 #[allow(unused_macros)]
 macro_rules! console_log {
     ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[wasm_bindgen]
+pub fn regex_to_nfa(regex: usize) -> Option<usize> {
+    REGEX_MAP.with_borrow_mut(|map| map.get(&regex).map(|regex| push_nfa(regex.to_nfa())))
 }
 
 #[wasm_bindgen]
@@ -143,6 +150,26 @@ pub fn dfa_to_table(dfa: usize) -> Option<String> {
 #[wasm_bindgen]
 pub fn nfa_to_table(nfa: usize) -> Option<String> {
     NFA_MAP.with_borrow(|map| map.get(&nfa).map(Nfa::to_table))
+}
+
+#[wasm_bindgen]
+pub fn delete_regex(regex: usize) -> bool {
+    REGEX_MAP.with_borrow_mut(|map| map.remove(&regex).is_some())
+}
+
+#[wasm_bindgen]
+pub fn load_regex(input: &str) -> Result<usize, String> {
+    let regex: Regex =
+        dandy::parser::regex(input).map_err(|e| format!("Error parsing Regex: {e:?}"))?;
+    Ok(push_regex(regex))
+}
+
+fn push_regex(regex: Regex) -> usize {
+    let key = gen_key();
+    REGEX_MAP.with_borrow_mut(|map| {
+        map.insert(key, regex);
+    });
+    key
 }
 
 #[wasm_bindgen]
