@@ -1,12 +1,13 @@
 [package]
 name = "dandy"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 license = "MIT"
-description = "Implementation of DFAs and NFAs together with a file format"
+description = "Implementation of DFAs, NFAs and regular expressions together with a file format"
 readme = "README.md"
 repository = "https://github.com/cmdjojo/dandy/"
 
 [dependencies]
 nom = "7.1.3"
 thiserror = "1.0.56"
+unicode-segmentation = "1.10.1"
