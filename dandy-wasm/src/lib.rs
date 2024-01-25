@@ -52,7 +52,7 @@ macro_rules! console_log {
 pub fn regex_to_nfa(regex: usize) -> Option<usize> {
     REGEX_MAP
         .with_borrow_mut(|map| map.remove(&regex))
-        .map(|regex| push_regex(regex))
+        .map(|regex| push_nfa(regex.to_nfa()))
 }
 
 #[wasm_bindgen]
