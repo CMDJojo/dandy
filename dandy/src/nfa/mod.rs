@@ -3,6 +3,7 @@ use crate::nfa::eval::NfaEvaluator;
 use crate::table::Table;
 use std::collections::{HashMap, HashSet};
 use std::{iter, mem};
+use unicode_segmentation::UnicodeSegmentation;
 
 pub mod eval;
 pub mod parse;
@@ -135,29 +136,25 @@ impl Nfa {
         eval.is_accepting()
     }
 
-    /// Checks if this automaton accepts the given string of characters, if every character by
+    /// Checks if this automaton accepts the given string of graphemes, if every grapheme by
     /// itself is considered as an element of the alphabet. Note that if the alphabet contains
-    /// elements with multiple characters, those won't be recognized. To check if there are
-    /// elements with multiple characters, see [Nfa::chars_only].
-    pub fn accepts_chars(&self, string: &str) -> bool {
-        let mut prev_idx = 0;
-        let slices = string
-            .char_indices()
-            .map(|(i, _)| {
-                let ss = &string[prev_idx..=i];
-                prev_idx = i + 1;
-                ss
-            })
-            .collect::<Vec<_>>();
+    /// elements with multiple graphemes, those won't be recognized. To check if there are
+    /// elements with multiple graphemes, see [Nfa::graphemes_only]. A grapheme is defined to be
+    /// one extended unicode grapheme cluster (which may consist of one or many code points).
+    pub fn accepts_graphemes(&self, string: &str) -> bool {
+        let graphemes = string.graphemes(true).collect::<Vec<_>>();
         let mut eval = self.evaluator();
-        eval.step_multiple(&slices);
+        eval.step_multiple(&graphemes);
         eval.is_accepting()
     }
 
-    /// Checks if the alphabet of this automaton consists of only single characters. If it does, one may use
-    /// [Nfa::accepts_chars] instead of [Nfa::accepts] for improved ergonomics.
-    pub fn chars_only(&self) -> bool {
-        self.alphabet.iter().all(|str| str.chars().count() == 1)
+    /// Checks if the alphabet of this automaton consists of only single graphemes. If it does, one may use
+    /// [Nfa::accepts_graphemes] instead of [Nfa::accepts] for improved ergonomics. A grapheme is defined to be
+    /// one extended unicode grapheme cluster (which may consist of one or many code points).
+    pub fn graphemes_only(&self) -> bool {
+        self.alphabet
+            .iter()
+            .all(|str| str.graphemes(true).count() == 1)
     }
 
     /// Checks if this automaton has any epsilon moves

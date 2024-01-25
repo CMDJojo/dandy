@@ -1,4 +1,4 @@
-//! # dandy parser
+//! # Parser for DFAs, NFAs and regular expressions
 //! This module contains parser implementations for DFAs, NFAs (with and without epsilon transitions) and regular
 //! expressions, according to a custom file format.
 //!
