@@ -27,8 +27,15 @@ struct Args {
         short,
         long,
         value_enum,
+        help = "Choose the input type of the correct answer (defaults to the same as the test type)"
+    )]
+    in_type: Option<FaType>,
+    #[arg(
+        short,
+        long,
+        value_enum,
         default_value_t,
-        help = "Choose if testing DFAs or NFAs"
+        help = "Choose if testing DFAs, NFAs or Regexes"
     )]
     r#type: FaType,
     #[arg(
@@ -63,7 +70,7 @@ struct Args {
     files: Vec<PathBuf>,
 }
 
-#[derive(Default, Clone, Copy, Debug, ValueEnum)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 enum FaType {
     #[default]
     Dfa,
@@ -85,6 +92,11 @@ enum TestType {
 
 fn main() {
     let args = Args::parse();
+    if let Some(in_type) = args.in_type {
+        if in_type != args.r#type {
+            unimplemented!("Input type other than the test type is not implemented");
+        }
+    }
     let file = fs::read_to_string(&args.automata);
     match file {
         Err(e) => {
@@ -233,7 +245,7 @@ fn do_equivalence_check(args: &Args, verify_fn: impl Fn(&str) -> EquivalenceResu
 }
 
 fn test(_args: &Args, _file: &str) {
-    todo!()
+    unimplemented!("'test' is not implemented")
 }
 
 // Code from readme to check validity
