@@ -2,6 +2,7 @@ use crate::dfa::{Dfa, DfaState};
 use crate::nfa::eval::NfaEvaluator;
 use crate::table::Table;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use std::{iter, mem};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -11,7 +12,7 @@ pub mod parse;
 /// A non-deterministic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug)]
 pub struct Nfa {
-    pub(crate) alphabet: Vec<String>,
+    pub(crate) alphabet: Vec<Rc<str>>,
     pub(crate) states: Vec<NfaState>,
     pub(crate) initial_state: usize,
 }
@@ -20,7 +21,7 @@ pub struct Nfa {
 /// or not, any amount of epsilon transitions and any amount of transitions for each element in alphabet
 #[derive(Clone, Debug)]
 pub struct NfaState {
-    pub(crate) name: String,
+    pub(crate) name: Rc<str>,
     pub(crate) initial: bool,
     pub(crate) accepting: bool,
     pub(crate) epsilon_transitions: Vec<usize>,
@@ -114,7 +115,7 @@ impl Nfa {
         let states = sorted_keys
             .into_iter()
             .map(|(key, &n)| DfaState {
-                name: n.to_string(),
+                name: Rc::from(n.to_string()),
                 initial: n == 0,
                 accepting: accepting.contains(&n),
                 transitions: transitions.remove(key).unwrap(),
@@ -292,7 +293,7 @@ impl Nfa {
     }
 
     /// Gets the alphabet of this NFA
-    pub fn alphabet(&self) -> &[String] {
+    pub fn alphabet(&self) -> &[Rc<str>] {
         self.alphabet.as_slice()
     }
 

@@ -50,6 +50,7 @@ use crate::dfa::eval::DfaEvaluator;
 use crate::nfa::{Nfa, NfaState};
 use crate::table::Table;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub mod eval;
@@ -58,7 +59,7 @@ pub mod parse;
 /// A deterministic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug)]
 pub struct Dfa {
-    pub(crate) alphabet: Vec<String>,
+    pub(crate) alphabet: Vec<Rc<str>>,
     pub(crate) states: Vec<DfaState>,
     pub(crate) initial_state: usize,
 }
@@ -67,7 +68,7 @@ pub struct Dfa {
 /// or not, and the transition for each element of the alphabet
 #[derive(Clone, Debug)]
 pub struct DfaState {
-    pub(crate) name: String,
+    pub(crate) name: Rc<str>,
     pub(crate) initial: bool,
     pub(crate) accepting: bool,
     pub(crate) transitions: Vec<usize>,
@@ -416,7 +417,7 @@ impl Dfa {
     }
 
     /// Gets the alphabet of this DFA
-    pub fn alphabet(&self) -> &[String] {
+    pub fn alphabet(&self) -> &[Rc<str>] {
         self.alphabet.as_slice()
     }
 

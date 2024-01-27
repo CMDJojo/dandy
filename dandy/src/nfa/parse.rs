@@ -1,6 +1,7 @@
 use crate::nfa::{Nfa, NfaState};
 use crate::parser::{NfaAlphabetEntry, ParsedNfa, ParsedNfaState};
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -101,7 +102,7 @@ impl<'a> TryFrom<ParsedNfa<'a>> for Nfa {
             }
 
             new_states.push(NfaState {
-                name: name.to_string(),
+                name: Rc::from(name),
                 initial,
                 accepting,
                 epsilon_transitions: epsilon_transitions.unwrap_or_default(),
@@ -112,12 +113,12 @@ impl<'a> TryFrom<ParsedNfa<'a>> for Nfa {
         if let Some(initial_state) = initial_state {
             let dfa = Nfa {
                 alphabet: head
-                    .iter()
+                    .into_iter()
                     .filter_map(|s| match s {
                         NfaAlphabetEntry::Eps => None,
-                        NfaAlphabetEntry::Element(s) => Some(s.to_string()),
+                        NfaAlphabetEntry::Element(s) => Some(Rc::from(s)),
                     })
-                    .collect::<Vec<String>>(),
+                    .collect::<Vec<_>>(),
                 states: new_states,
                 initial_state,
             };

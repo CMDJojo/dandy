@@ -1,6 +1,7 @@
 use crate::nfa::{Nfa, NfaState};
 use std::collections::HashMap;
 use std::iter;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Regex {
@@ -17,7 +18,7 @@ pub enum RegexTree {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegexChar {
-    Grapheme(String),
+    Grapheme(Rc<str>),
     Epsilon,
     Empty,
 }
@@ -55,10 +56,10 @@ impl Regex {
         let mut char_map = HashMap::new();
         let mut idx_acc = 0..;
         let mut grapheme_idx =
-            |g: String| -> usize { *char_map.entry(g).or_insert_with(|| idx_acc.next().unwrap()) };
+            |g: Rc<str>| -> usize { *char_map.entry(g).or_insert_with(|| idx_acc.next().unwrap()) };
 
         let accepting_state = NfaState {
-            name: format!("{}", counter.next()),
+            name: Rc::from(counter.next().to_string()),
             initial: false,
             accepting: true,
             epsilon_transitions: vec![],
@@ -67,7 +68,7 @@ impl Regex {
 
         // The initial state should send to the first thing in the tree
         let initial_state = NfaState {
-            name: format!("{}", counter.next()),
+            name: Rc::from(counter.next().to_string()),
             initial: true,
             accepting: false,
             epsilon_transitions: vec![counter.peek()],
@@ -107,12 +108,12 @@ impl Regex {
     fn tree_to_nfa(
         tree: RegexTree,
         counter: &mut StateCounter,
-        grapheme_idx: &mut impl FnMut(String) -> usize,
+        grapheme_idx: &mut impl FnMut(Rc<str>) -> usize,
         send_to: usize,
     ) -> Vec<NfaState> {
         let incoming_state_idx = counter.next();
         let mut incoming_state = NfaState {
-            name: format!("{incoming_state_idx}"),
+            name: Rc::from(incoming_state_idx.to_string()),
             initial: false,
             accepting: false,
             epsilon_transitions: vec![],
@@ -133,7 +134,7 @@ impl Regex {
                         .flat_map(|(idx, subtree)| {
                             let after_state_idx = counter.next();
                             let mut after_state = NfaState {
-                                name: format!("{}", after_state_idx),
+                                name: Rc::from(after_state_idx.to_string()),
                                 initial: false,
                                 accepting: false,
                                 epsilon_transitions: vec![],

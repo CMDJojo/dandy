@@ -7,6 +7,7 @@ use nom::multi::{many1, separated_list1};
 use nom::sequence::{delimited, preceded};
 use nom::{IResult, Parser};
 use std::hint::unreachable_unchecked;
+use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub(crate) fn full_regex(input: &str) -> IResult<&str, Regex> {
@@ -89,7 +90,7 @@ fn one_cluster(input: &str) -> IResult<&str, RegexChar> {
     let Some(grapheme) = indices.next() else {
         return fail(input);
     };
-    let regex = RegexChar::Grapheme(grapheme.to_string());
+    let regex = RegexChar::Grapheme(Rc::from(grapheme));
     Ok((&input[grapheme.len()..], regex))
 }
 

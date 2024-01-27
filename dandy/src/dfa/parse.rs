@@ -1,6 +1,7 @@
 use crate::dfa::{Dfa, DfaState};
 use crate::parser::{ParsedDfa, ParsedDfaState};
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -73,7 +74,7 @@ impl<'a> TryFrom<ParsedDfa<'a>> for Dfa {
             }
 
             new_states.push(DfaState {
-                name: name.to_string(),
+                name: Rc::from(name),
                 initial,
                 accepting,
                 transitions: new_transitions,
@@ -82,7 +83,7 @@ impl<'a> TryFrom<ParsedDfa<'a>> for Dfa {
 
         if let Some(initial_state) = initial_state {
             let dfa = Dfa {
-                alphabet: head.iter().map(|s| s.to_string()).collect(),
+                alphabet: head.into_iter().map(Rc::from).collect(),
                 states: new_states,
                 initial_state,
             };
