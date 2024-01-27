@@ -1,11 +1,14 @@
 use clap::{Parser, ValueEnum};
+use dandy::dfa::parse::DfaParseError;
 use dandy::dfa::Dfa;
+use dandy::nfa::parse::NfaParseError;
 use dandy::nfa::Nfa;
 use dandy::parser;
-use dandy::parser::ParsedDfa;
 use std::fmt::Display;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
+use thiserror::Error;
 
 /// This command can be used to run operations on DFAs or NFAs.
 ///
@@ -14,7 +17,8 @@ use std::path::PathBuf;
 ///     when testing it.
 /// The `equivalence` operation checks which of many automata are equivalent to the automata provided.
 /// The `test` operation checks which files has all/any lines accepted by the automata.
-// Example usage: dandy equivalence tests/dfa1.dfa tests/example_tree/**/*.dfa
+// Example usage: dandy-cli equivalence tests/dfa1.dfa tests/example_tree/**/*.dfa
+//                dandy-cli equivalence --in-type nfa --minimized tests/nfa1.nfa tests/example_tree/**/*.dfa
 #[derive(Parser, Debug)]
 #[command(
     version,
@@ -54,7 +58,7 @@ struct Args {
         short,
         long,
         default_value_t,
-        help = "(For 'equivalence' operation): Requires the DFAs/NFAs to be minimized"
+        help = "(For 'equivalence' operation, for 'DFA' test type only): Requires the DFAs to be minimized"
     )]
     minimized: bool,
     #[arg(
@@ -64,6 +68,10 @@ struct Args {
         help = "Output 'true'/'false' rather than a result in text format"
     )]
     r#bool: bool,
+    #[arg(long, default_value_t, help = "Disables additional logging")]
+    no_log: bool,
+    #[arg(short, long, help = "How many path components to print (0 to disable)")]
+    path_length: Option<usize>,
     #[arg()]
     automata: PathBuf,
     #[arg()]
@@ -75,6 +83,7 @@ enum FaType {
     #[default]
     Dfa,
     Nfa,
+    Regex,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -92,11 +101,6 @@ enum TestType {
 
 fn main() {
     let args = Args::parse();
-    if let Some(in_type) = args.in_type {
-        if in_type != args.r#type {
-            unimplemented!("Input type other than the test type is not implemented");
-        }
-    }
     let file = fs::read_to_string(&args.automata);
     match file {
         Err(e) => {
@@ -104,7 +108,9 @@ fn main() {
         }
         Ok(f) => match args.operation {
             OpType::Equivalence => {
-                equivalence(&args, &f);
+                if let Err(e) = equivalence(&args, &f) {
+                    eprintln!("Could not start test: {e}")
+                }
             }
             OpType::Test => {
                 test(&args, &f);
@@ -137,111 +143,291 @@ impl Display for EquivalenceResult {
     }
 }
 
-fn equivalence(args: &Args, file: &str) {
-    use EquivalenceResult::*;
-    match args.r#type {
-        FaType::Dfa => {
-            let dfa: Dfa = {
-                let parse = parser::dfa(file);
-                if let Err(e) = parse {
-                    eprintln!("Error parsing input DFA: {e}");
-                    return;
-                }
-                let dfa = parse.unwrap().try_into();
-                if let Err(e) = dfa {
-                    eprintln!("Error validating input DFA: {e}");
-                    return;
-                }
-                let mut dfa: Dfa = dfa.unwrap();
-                if args.minimized {
-                    let prev_states = dfa.states().len();
-                    dfa.minimize();
-                    if dfa.states().len() != prev_states {
-                        println!("Note: Your input DFA was not minimized. It has been minimized prior to comparing");
-                    }
-                }
-                dfa
-            };
-            let verify_fn = move |file: &str| -> EquivalenceResult {
-                let parse: ParsedDfa = match parser::dfa(file) {
-                    Err(e) => return FailedToParse(e.to_string()),
-                    Ok(f) => f,
-                };
-                let other_dfa: Dfa = match Dfa::try_from(parse) {
-                    Err(e) => return FailedToValidate(e.to_string()),
-                    Ok(f) => f,
-                };
-                if dfa.equivalent_to(&other_dfa) {
-                    if args.minimized && other_dfa.states().len() != dfa.states().len() {
-                        // Only if we ask for minimized DFAs and it is not, return NotMinimized
-                        NotMinimized
-                    } else {
-                        Equivalent
-                    }
-                } else {
-                    NotEquivalent
-                }
-            };
-            do_equivalence_check(args, verify_fn);
+fn equivalence<'a>(args: &Args, file: &'a str) -> Result<(), TesterError<'a>> {
+    let tester = DandyTester::new(file, args)?;
+    #[allow(unused_variables)]
+    let log = |s: &str| {
+        if !args.no_log {
+            println!("{s}")
         }
-        FaType::Nfa => {
-            if args.minimized {
-                eprintln!(
-                    "Warn: --minimized can't be used with NFAs, only with DFAs, and is now ignored"
-                );
+    };
+    macro_rules! log {
+        ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+    }
+
+    log!("Input loaded:");
+    log!("{}", tester.input_automata().table());
+
+    let start = SystemTime::now();
+    let results = args
+        .files
+        .iter()
+        .map(|path| (path, tester.test_equivalence(path)))
+        .collect::<Vec<_>>();
+    let duration = SystemTime::now().duration_since(start).unwrap_or_default();
+
+    log!(
+        "Testing of {} files done in {}ms. Results:",
+        args.files.len(),
+        duration.as_millis()
+    );
+
+    let successes = results.into_iter().fold(0usize, |acc, (path, result)| {
+        let res = if args.bool {
+            format!("{}", result == EquivalenceResult::Equivalent)
+        } else {
+            result.to_string()
+        };
+        if let Some(prefix) = last_n_components(path, args.path_length) {
+            println!("{prefix}: {res}");
+        } else {
+            println!("{res}");
+        }
+
+        if result == EquivalenceResult::Equivalent {
+            acc + 1
+        } else {
+            acc
+        }
+    });
+
+    log!("{}/{} files passed", successes, args.files.len());
+
+    Ok(())
+}
+
+fn last_n_components(path: &Path, n: Option<usize>) -> Option<String> {
+    let Some(n) = n else {
+        return Some(path.display().to_string());
+    };
+    (n != 0).then(|| {
+        let new_path = path.components().rev().take(n).collect::<PathBuf>();
+        new_path
+            .components()
+            .rev()
+            .collect::<PathBuf>()
+            .display()
+            .to_string()
+    })
+}
+
+struct DandyTester {
+    input: Automata,
+    minimized: bool,
+    test_type: FaType,
+}
+
+impl DandyTester {
+    fn input_automata(&self) -> &Automata {
+        &self.input
+    }
+
+    fn new<'a>(file: &'a str, args: &Args) -> Result<DandyTester, TesterError<'a>> {
+        let mut input = match args.in_type.unwrap_or(args.r#type) {
+            FaType::Dfa => {
+                let dfa = parser::dfa(file)
+                    .map_err(TesterError::DfaParseError)?
+                    .try_into()
+                    .map_err(TesterError::DfaError)?;
+                Automata::Dfa(dfa)
             }
-            let nfa: Nfa = {
-                let parse = parser::nfa(file);
-                if let Err(e) = parse {
-                    eprintln!("Error parsing input NFA: {e}");
-                    return;
-                }
-                let nfa = parse.unwrap().try_into();
-                if let Err(e) = nfa {
-                    eprintln!("Error validating input NFA: {e}");
-                    return;
-                }
-                nfa.unwrap()
-            };
-            let verify_fn = move |file: &str| -> EquivalenceResult {
-                let parse = match parser::nfa(file) {
-                    Err(e) => return FailedToParse(e.to_string()),
-                    Ok(f) => f,
-                };
-                let other_nfa = match Nfa::try_from(parse) {
-                    Err(e) => return FailedToValidate(e.to_string()),
-                    Ok(f) => f,
-                };
-                if nfa.equivalent_to(&other_nfa) {
-                    Equivalent
-                } else {
-                    NotEquivalent
-                }
-            };
-            do_equivalence_check(args, verify_fn);
+            FaType::Nfa => {
+                let nfa = parser::nfa(file)
+                    .map_err(TesterError::NfaParseError)?
+                    .try_into()
+                    .map_err(TesterError::NfaError)?;
+                Automata::Nfa(nfa)
+            }
+            FaType::Regex => {
+                let regex = parser::regex(file).map_err(TesterError::RegexParseError)?;
+                let nfa = regex.to_nfa();
+                let dfa = nfa.to_dfa(); // To reduce states, regex->nfa can produce MANY states
+                Automata::Dfa(dfa)
+            }
+        };
+
+        let minimized = if args.minimized {
+            if args.r#type == FaType::Dfa {
+                input = input.into_minimized_dfa();
+                true
+            } else {
+                return Err(TesterError::InvalidMinimizedConfig);
+            }
+        } else {
+            false
+        };
+
+        input = input.prepare_to_compare_with(args.r#type);
+
+        Ok(Self {
+            input,
+            minimized,
+            test_type: args.r#type,
+        })
+    }
+
+    fn test_equivalence(&self, file: &Path) -> EquivalenceResult {
+        match fs::read_to_string(file) {
+            Err(e) => EquivalenceResult::FailedToRead(e.to_string()),
+            Ok(f) => match Automata::load_test(&f, self.test_type) {
+                Ok(automata) => self.input.test_equivalence(&automata, self.minimized),
+                Err(res) => res,
+            },
         }
     }
 }
 
-fn do_equivalence_check(args: &Args, verify_fn: impl Fn(&str) -> EquivalenceResult) {
-    let results = args
-        .files
-        .iter()
-        .map(|file| match fs::read_to_string(file) {
-            Err(e) => EquivalenceResult::FailedToRead(e.to_string()),
-            Ok(f) => verify_fn(&f),
-        })
-        .zip(args.files.iter())
-        .collect::<Vec<_>>();
+#[derive(Error, Debug)]
+enum TesterError<'a> {
+    #[error("Error parsing DFA: {0:?}")]
+    DfaParseError(nom::error::Error<&'a str>),
+    #[error("Error compiling DFA: {0}")]
+    DfaError(DfaParseError<'a>),
+    #[error("Error parsing NFA: {0:?}")]
+    NfaParseError(nom::error::Error<&'a str>),
+    #[error("Error compiling NFA: {0}")]
+    NfaError(NfaParseError<'a>),
+    #[error("Error parsing regular expression: {0:?}")]
+    RegexParseError(nom::error::Error<&'a str>),
+    #[error("--minimized option can only be used when testing DFAs")]
+    InvalidMinimizedConfig,
+}
 
-    results.iter().for_each(|(res, path)| {
-        let out = if args.bool {
-            (res == &EquivalenceResult::Equivalent).to_string()
-        } else {
-            res.to_string()
+enum Automata {
+    Dfa(Dfa),
+    Nfa(Nfa),
+}
+
+impl Automata {
+    fn load_test(file: &str, r#type: FaType) -> Result<Self, EquivalenceResult> {
+        match r#type {
+            FaType::Dfa => {
+                let dfa = parser::dfa(file)
+                    .map_err(|e| EquivalenceResult::FailedToParse(e.to_string()))?
+                    .try_into()
+                    .map_err(|e: DfaParseError| {
+                        EquivalenceResult::FailedToValidate(e.to_string())
+                    })?;
+                Ok(Automata::Dfa(dfa))
+            }
+            FaType::Nfa => {
+                let nfa = parser::nfa(file)
+                    .map_err(|e| EquivalenceResult::FailedToParse(e.to_string()))?
+                    .try_into()
+                    .map_err(|e: NfaParseError| {
+                        EquivalenceResult::FailedToValidate(e.to_string())
+                    })?;
+                Ok(Automata::Nfa(nfa))
+            }
+            FaType::Regex => {
+                let regex = parser::regex(file)
+                    .map_err(|e| EquivalenceResult::FailedToParse(e.to_string()))?;
+                let nfa = regex.to_nfa();
+                Ok(Automata::Nfa(nfa)) // We don't really need to reduce states here as much, since
+                                       // base testing with has fewer states
+            }
+        }
+    }
+
+    fn test_equivalence(&self, other: &Self, minimized: bool) -> EquivalenceResult {
+        use EquivalenceResult::*;
+        match &self {
+            Automata::Dfa(this_dfa) => {
+                match other {
+                    Automata::Dfa(other_dfa) => {
+                        if this_dfa.equivalent_to(other_dfa) {
+                            if this_dfa.states().len() == other_dfa.states().len() || !minimized {
+                                Equivalent
+                            } else {
+                                NotMinimized
+                            }
+                        } else {
+                            NotEquivalent
+                        }
+                    }
+                    Automata::Nfa(other_nfa) => {
+                        eprintln!("Comparing this (DFA) to other (NFA), performance inpact, shouldn't happen");
+                        if minimized {
+                            eprintln!("Trying to compare minimization of NFA, can't be done");
+                        }
+                        let this_nfa = this_dfa.clone().to_nfa();
+                        if this_nfa.equivalent_to(other_nfa) {
+                            Equivalent
+                        } else {
+                            NotEquivalent
+                        }
+                    }
+                }
+            }
+            Automata::Nfa(this_nfa) => {
+                match other {
+                    Automata::Dfa(other_dfa) => {
+                        eprintln!("Comparing this (NFA) to other (DFA), performance impact, shouldn't happen");
+                        let mut this_dfa = this_nfa.to_dfa();
+                        if minimized {
+                            this_dfa.minimize();
+                        }
+                        if this_dfa.equivalent_to(other_dfa) {
+                            if this_dfa.states().len() == other_dfa.states().len() || !minimized {
+                                Equivalent
+                            } else {
+                                NotMinimized
+                            }
+                        } else {
+                            NotEquivalent
+                        }
+                    }
+                    Automata::Nfa(other_nfa) => {
+                        if minimized {
+                            eprintln!("Trying to compare minimization of NFA, can't be done");
+                        }
+                        if this_nfa.equivalent_to(other_nfa) {
+                            Equivalent
+                        } else {
+                            NotEquivalent
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn into_minimized_dfa(self) -> Self {
+        let mut dfa = match self {
+            Automata::Dfa(dfa) => dfa,
+            Automata::Nfa(nfa) => nfa.to_dfa(),
         };
-        println!("{}: {}", path.to_string_lossy(), out)
-    })
+        dfa.minimize();
+        Automata::Dfa(dfa)
+    }
+
+    fn prepare_to_compare_with(self, other: FaType) -> Self {
+        match other {
+            FaType::Dfa => self.into_dfa(),
+            FaType::Nfa | FaType::Regex => self.into_nfa(),
+        }
+    }
+
+    fn into_dfa(self) -> Self {
+        match self {
+            Automata::Dfa(dfa) => Automata::Dfa(dfa),
+            Automata::Nfa(nfa) => Automata::Dfa(nfa.to_dfa()),
+        }
+    }
+
+    fn into_nfa(self) -> Self {
+        match self {
+            Automata::Dfa(dfa) => Automata::Nfa(dfa.to_nfa()),
+            Automata::Nfa(nfa) => Automata::Nfa(nfa),
+        }
+    }
+
+    fn table(&self) -> String {
+        match self {
+            Automata::Dfa(dfa) => dfa.to_table(),
+            Automata::Nfa(nfa) => nfa.to_table(),
+        }
+    }
 }
 
 fn test(_args: &Args, _file: &str) {
@@ -270,9 +456,6 @@ fn main1() {
         z y w z
         w y z w
     ";
-    let dfa2 = dandy::parser::dfa(equivalent_dfa)
-        .unwrap()
-        .try_into()
-        .unwrap();
+    let dfa2 = parser::dfa(equivalent_dfa).unwrap().try_into().unwrap();
     assert!(dfa.equivalent_to(&dfa2));
 }

@@ -1,0 +1,5 @@
+           eps     a            b
+-> * ok    {other} {fail other} {ok}
+     fail  {other} {ok}         {fail}
+     other {inf}  {other}      {}
+     inf   {}      {other}      {other}
