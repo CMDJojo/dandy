@@ -121,7 +121,11 @@ fn alphabet_elem(input: &str) -> IResult<&str, &str> {
 }
 
 fn state_set(input: &str) -> IResult<&str, Vec<&str>> {
-    delimited(tag("{"), separated_list0(space1, state_name), tag("}"))(input)
+    delimited(
+        tag("{"),
+        delimited(space0, separated_list0(space1, state_name), space0),
+        tag("}"),
+    )(input)
 }
 
 fn state_name(input: &str) -> IResult<&str, &str> {

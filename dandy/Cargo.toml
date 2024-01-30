@@ -1,6 +1,6 @@
 [package]
 name = "dandy"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 license = "MIT"
 description = "Implementation of DFAs, NFAs and regular expressions together with a file format"
