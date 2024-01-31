@@ -167,9 +167,14 @@ impl Dfa {
     /// Gives the equivalence classes of the states of this DFA, which is the sets of non-distinguishable states, by
     /// their indices
     pub fn state_equivalence_classes_idx(&self) -> Vec<HashSet<usize>> {
-        let (finals, nonfinals) =
+        let (finals, nonfinals): (HashSet<usize>, HashSet<usize>) =
             (0..self.states.len()).partition(|&idx| self.states[idx].accepting);
-        let mut p: Vec<HashSet<_>> = vec![finals, nonfinals];
+        if finals.is_empty() {
+            return vec![nonfinals];
+        } else if nonfinals.is_empty() {
+            return vec![finals];
+        }
+        let mut p = vec![finals, nonfinals];
         let mut w = p.clone();
 
         // Hopcroft's algorithm
@@ -257,17 +262,20 @@ impl Dfa {
 
     /// This function removes the states with indices in the vector from this DFA, changing the transition tables
     /// of the remaining states to the new state indices. There should not be any transitions to any of the states
-    /// that are to be removed. If there is, transitions may be undefined after this call. If debug_assertions is
-    /// enabled, such errors would cause a panic here, otherwise they would not be and the DFA might panic at a later
-    /// stage
+    /// that are to be removed (except for in any of the states that are to be removed). If there is, transitions may be
+    /// undefined after this call. If debug_assertions is enabled, such errors would cause a panic here, otherwise they
+    /// would not be and the DFA might panic at a later stage
     fn remove_states(&mut self, mut to_remove: Vec<usize>) {
         let mut old_state_idx = (0..self.states.len()).collect::<Vec<_>>();
 
         to_remove.sort();
-        assert!(
-            to_remove.binary_search(&self.initial_state).is_err(),
-            "Cannot remove initial state"
-        );
+        if let Err(less_than) = to_remove.binary_search(&self.initial_state) {
+            // We removed "less than" states before the initial state: adjust
+            self.initial_state -= less_than;
+        } else {
+            panic!("Cannot remove initial state");
+        }
+
         to_remove.iter().rev().for_each(|&idx| {
             self.states.remove(idx);
             old_state_idx.remove(idx);
