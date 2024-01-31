@@ -116,22 +116,5 @@ pub mod nfa;
 pub mod parser;
 pub mod regex;
 mod table;
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_subset_construction() {
-        let dfa_source = include_str!("../tests/test_files/eq_to_nfa1.dfa");
-        let parsed_dfa = parser::dfa(dfa_source).unwrap();
-        let dfa: dfa::Dfa = parsed_dfa.try_into().unwrap();
-
-        let nfa_source = include_str!("../tests/test_files/nfa1.nfa");
-        let parsed_nfa = parser::nfa(nfa_source).unwrap();
-        let nfa: nfa::Nfa = parsed_nfa.try_into().unwrap();
-
-        let converted = nfa.to_dfa();
-        assert!(dfa.equivalent_to(&converted));
-    }
-}
+mod tests;

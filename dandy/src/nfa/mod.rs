@@ -10,7 +10,7 @@ pub mod eval;
 pub mod parse;
 
 /// A non-deterministic finite automata, denoted by its alphabet, states and the initial state
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Nfa {
     pub(crate) alphabet: Vec<Rc<str>>,
     pub(crate) states: Vec<NfaState>,
@@ -19,7 +19,7 @@ pub struct Nfa {
 
 /// A state in a NFA automata, which consists of its name, if it is the initial state or not, if it is accepting
 /// or not, any amount of epsilon transitions and any amount of transitions for each element in alphabet
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NfaState {
     pub(crate) name: Rc<str>,
     pub(crate) initial: bool,

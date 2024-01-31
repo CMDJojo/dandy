@@ -57,7 +57,7 @@ pub mod eval;
 pub mod parse;
 
 /// A deterministic finite automata, denoted by its alphabet, states and the initial state
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dfa {
     pub(crate) alphabet: Vec<Rc<str>>,
     pub(crate) states: Vec<DfaState>,
@@ -66,7 +66,7 @@ pub struct Dfa {
 
 /// A state in a DFA automata, which consists of its name, if it is the initial state or not, if it is accepting
 /// or not, and the transition for each element of the alphabet
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DfaState {
     pub(crate) name: Rc<str>,
     pub(crate) initial: bool,
