@@ -1,5 +1,5 @@
 # This is a workflow based on an example provided by GitHub and on rossjrw/pr-preview-action
-name: Deploy main website
+name: Test
 
 on:
   # Runs on pushes targeting the default branch
@@ -14,17 +14,9 @@ permissions:
   contents: write
   id-token: write
 
-# Allow one concurrent deployment
-concurrency:
-  group: "deploy-main"
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./dandy-wasm
     steps:
       - name: Checkout
         uses: actions/checkout@v3
