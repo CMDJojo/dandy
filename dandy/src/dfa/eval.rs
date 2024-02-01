@@ -24,7 +24,7 @@ impl<'a> DfaEvaluator<'a> {
 
     pub fn step_all(&self) -> Vec<DfaEvaluator<'a>> {
         iter::repeat(self.clone())
-            .zip(&self.dfa.alphabet)
+            .zip(self.dfa.alphabet())
             .map(|(mut eval, elem)| {
                 eval.step(elem);
                 eval

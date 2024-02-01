@@ -1,11 +1,12 @@
 use crate::nfa::{Nfa, NfaState};
 use std::collections::{HashMap, HashSet};
 use std::iter;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct NfaEvaluator<'a> {
     nfa: &'a Nfa,
-    rev_map: HashMap<&'a str, usize>,
+    rev_map: Rc<HashMap<&'a str, usize>>,
     current_states: HashSet<usize>,
 }
 
@@ -27,7 +28,7 @@ impl<'a> NfaEvaluator<'a> {
 
     pub fn step_all(&self) -> Vec<NfaEvaluator<'a>> {
         iter::repeat(self.clone())
-            .zip(&self.nfa.alphabet)
+            .zip(self.nfa.alphabet())
             .map(|(mut eval, elem)| {
                 eval.step(elem);
                 eval
@@ -79,7 +80,7 @@ impl<'a> From<&'a Nfa> for NfaEvaluator<'a> {
             .collect();
         let mut evaluator = Self {
             nfa: value,
-            rev_map: map,
+            rev_map: Rc::new(map),
             current_states: HashSet::new(),
         };
         evaluator.current_states.insert(value.initial_state);

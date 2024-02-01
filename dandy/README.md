@@ -112,3 +112,10 @@ This library currently supports:
 * Identifying and removing unreachable states from a DFA
 * Identifying and merging non-distinguishable states from a DFA
 * Minimizing a DFA (by executing the two above-mentioned steps)
+* Powerset construction, with a custom combinator or with:
+  * Union (boolean or)
+  * Intersection (boolean and)
+  * Difference (a and not b)
+  * Symmetric difference (boolean xor)
+* Parsing regexes (validation is done in parsing step)
+* Converting regexes to NFAs

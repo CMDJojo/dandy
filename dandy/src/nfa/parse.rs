@@ -118,7 +118,7 @@ impl<'a> TryFrom<ParsedNfa<'a>> for Nfa {
                         NfaAlphabetEntry::Eps => None,
                         NfaAlphabetEntry::Element(s) => Some(Rc::from(s)),
                     })
-                    .collect::<Vec<_>>(),
+                    .collect::<Rc<[_]>>(),
                 states: new_states,
                 initial_state,
             };

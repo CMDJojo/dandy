@@ -12,7 +12,7 @@ pub mod parse;
 /// A non-deterministic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Nfa {
-    pub(crate) alphabet: Vec<Rc<str>>,
+    pub(crate) alphabet: Rc<[Rc<str>]>,
     pub(crate) states: Vec<NfaState>,
     pub(crate) initial_state: usize,
 }
@@ -294,7 +294,7 @@ impl Nfa {
 
     /// Gets the alphabet of this NFA
     pub fn alphabet(&self) -> &[Rc<str>] {
-        self.alphabet.as_slice()
+        &self.alphabet
     }
 
     /// Gets the states of this NFA

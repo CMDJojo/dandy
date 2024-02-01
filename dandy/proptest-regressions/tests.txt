@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a1d27347b07c6c8d2d0a11352eca67029fb2d21dffc43180620282c37133f3b8 # shrinks to regex_str = "a", tests = ["a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "xsecllwzitg", "ucbixmcydhtpjdeqkuridfti", "gpxoiynd", "gdzzq", "tlonlyzeatnxyplrngtm", "omqjwbq", "akfdqarvoh", "lgpxpadsfzlckw", "lqyhqkinbqlbnnvdhm", "dbdcvvqzjldfeecfwvzbjz", "hfokhgymfiaz", "nlekwvyytrheoyxymitqstlqlmzi", "cmtbzjdyrmafgylrcplbmxlmslbhfgtb", "soaumubyfsfmivnzkggfokndb", "mfpiritcomqkorkvfbejvjlkycnzxpfj", "gbglqitossts", "eqpihszkwawneihxqlieydmvmyy", "zbugfvsyhgosllg", "boqpdi", "rissbliowsrvyhiluank", "jwufmlavrejixkekkq", "dfw", "djtzjtadm", "cnixptssmulymi", "nnpoanvmusgcbvwenpiiksrtxk", "gmufxibeibgydckpnrvxgyrsvncxx", "qvsrtsckvzp", "mwlgoherru", "xbgqo", "txfujpz", "vkv", "zczyunrb", "eegjcxydpxkhmztenotmuxukkccqxbdt", "smlafiywyvguulpnykcmtsxhqoajtbdd", "abvztasuuzsvgzykthqkcxsbzbcmv", "prijtfisdnjbhwinycnvgktnhik", "teqkalml", "yyuwhcjpkyordcltwifbr", "xvdnbplys", "n", "djbazmzrtuqdw", "nsobozyozhocjiwvhdnc", "xgbawigfbswsigjhekpg", "wkmijhiclzjwqnpi", "mjtf", "spsdyqdwybvizizfgkcluamraqphd", "kydrropqtdslrmel", "azpxyodhba", "lgqxujafgs", "byfaatsrnzcfkrxegoebpdehswbe", "hzubkpuxwtc", "nuazefjedivmkjydogdnuciwnjqwk", "zpth", "vbqlcwcmyxqruuufslfgnfwsyef"]
+cc d69943a06a5d5acc39c99a9b292491310bf8b02786f8b776b725ad2285e8d680 # shrinks to regex_str = "n|a|a", tests = ["aa"]
+cc b6877a2a482cf7319a3eabbff2ab8cb16218edbddf94a823f27374aa04b531db # shrinks to regex_str = "(b)", tests = ["bc"]

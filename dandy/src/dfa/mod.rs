@@ -59,7 +59,7 @@ pub mod parse;
 /// A deterministic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dfa {
-    pub(crate) alphabet: Vec<Rc<str>>,
+    pub(crate) alphabet: Rc<[Rc<str>]>,
     pub(crate) states: Vec<DfaState>,
     pub(crate) initial_state: usize,
 }
@@ -121,6 +121,251 @@ impl From<Dfa> for Nfa {
 }
 
 impl Dfa {
+    /// Inverts this automata, which means that any states that were previously accepting becomes non-accepting and any
+    /// states that were previously non-accepting becomes accepting.
+    pub fn invert(&mut self) {
+        self.states
+            .iter_mut()
+            .for_each(|s| s.accepting = !s.accepting)
+    }
+
+    /// Constructs the union of two DFAs, that is, a new DFA that accepts exactly those strings that are accepted by
+    /// the first, second or both DFAs. This returns `None` if and only if the alphabets of the two DFAs are unequal
+    /// (not considering ordering).
+    ///
+    /// ```
+    /// use dandy::parser;
+    /// use dandy::dfa::Dfa;
+    ///
+    /// let ends_with_a = "
+    ///      a b c
+    /// -> n y n n
+    ///  * y y n n";
+    /// let starts_with_b = "
+    ///      a b c
+    /// -> i n y n
+    ///    n n n n
+    ///  * y y y y";
+    /// let ends_with_a: Dfa = parser::dfa(ends_with_a).unwrap().try_into().unwrap();
+    /// let starts_with_b: Dfa = parser::dfa(starts_with_b).unwrap().try_into().unwrap();
+    ///
+    /// // 'any' accepts strings that ends with a or starts with b.
+    /// let any = ends_with_a.union(&starts_with_b).unwrap();
+    /// assert!(any.accepts_graphemes("aa"));
+    /// assert!(!any.accepts_graphemes("ab"));
+    /// assert!(any.accepts_graphemes("ba"));
+    /// assert!(any.accepts_graphemes("bb"));
+    /// ```
+    pub fn union(&self, other: &Self) -> Option<Self> {
+        self.product_construction(other, |s1, s2| s1.accepting || s2.accepting)
+    }
+
+    /// Constructs the intersection of two DFAs, that is, a new DFA that accepts exactly those strings that are accepted
+    /// by both the first and second DFAs. This returns `None` if and only if the alphabets of the two DFAs are unequal
+    /// (not considering ordering).
+    ///
+    /// ```
+    /// use dandy::parser;
+    /// use dandy::dfa::Dfa;
+    ///
+    /// let ends_with_a = "
+    ///      a b c
+    /// -> n y n n
+    ///  * y y n n";
+    /// let starts_with_b = "
+    ///      a b c
+    /// -> i n y n
+    ///    n n n n
+    ///  * y y y y";
+    /// let ends_with_a: Dfa = parser::dfa(ends_with_a).unwrap().try_into().unwrap();
+    /// let starts_with_b: Dfa = parser::dfa(starts_with_b).unwrap().try_into().unwrap();
+    ///
+    /// // 'both' accepts strings that ends with a and starts with b.
+    /// let both = ends_with_a.intersection(&starts_with_b).unwrap();
+    /// assert!(!both.accepts_graphemes("aa"));
+    /// assert!(!both.accepts_graphemes("ab"));
+    /// assert!(both.accepts_graphemes("ba"));
+    /// assert!(!both.accepts_graphemes("bb"));
+    /// ```
+    pub fn intersection(&self, other: &Self) -> Option<Self> {
+        self.product_construction(other, |s1, s2| s1.accepting && s2.accepting)
+    }
+
+    /// Constructs the difference of two DFAs, that is, a new DFA that accepts exactly those strings that are accepted
+    /// by the first DFA but not by the second DFA. This returns `None` if and only if the alphabets of the two DFAs are
+    /// unequal (not considering ordering).
+    ///
+    /// ```
+    /// use dandy::parser;
+    /// use dandy::dfa::Dfa;
+    ///
+    /// let ends_with_a = "
+    ///      a b c
+    /// -> n y n n
+    ///  * y y n n";
+    /// let starts_with_b = "
+    ///      a b c
+    /// -> i n y n
+    ///    n n n n
+    ///  * y y y y";
+    /// let ends_with_a: Dfa = parser::dfa(ends_with_a).unwrap().try_into().unwrap();
+    /// let starts_with_b: Dfa = parser::dfa(starts_with_b).unwrap().try_into().unwrap();
+    ///
+    /// // 'a_not_b' accepts strings that ends with a and doesn't start with b.
+    /// let a_not_b = ends_with_a.difference(&starts_with_b).unwrap();
+    /// assert!(a_not_b.accepts_graphemes("aa"));
+    /// assert!(!a_not_b.accepts_graphemes("ab"));
+    /// assert!(!a_not_b.accepts_graphemes("ba"));
+    /// assert!(!a_not_b.accepts_graphemes("bb"));
+    /// ```
+    pub fn difference(&self, other: &Self) -> Option<Self> {
+        self.product_construction(other, |s1, s2| s1.accepting && !s2.accepting)
+    }
+
+    /// Constructs the symmetric difference of two DFAs, that is, a new DFA that accepts exactly those strings that are
+    /// accepted by either the first or second DFA but not by them both. This returns `None` if and only if the
+    /// alphabets of the two DFAs are unequal (not considering ordering).
+    ///
+    /// ```
+    /// use dandy::parser;
+    /// use dandy::dfa::Dfa;
+    ///
+    /// let ends_with_a = "
+    ///      a b c
+    /// -> n y n n
+    ///  * y y n n";
+    /// let starts_with_b = "
+    ///      a b c
+    /// -> i n y n
+    ///    n n n n
+    ///  * y y y y";
+    /// let ends_with_a: Dfa = parser::dfa(ends_with_a).unwrap().try_into().unwrap();
+    /// let starts_with_b: Dfa = parser::dfa(starts_with_b).unwrap().try_into().unwrap();
+    ///
+    /// // 'a_or_b' accepts strings that ends with a or starts with b, but not both.
+    /// let a_or_b = ends_with_a.symmetric_difference(&starts_with_b).unwrap();
+    /// assert!(a_or_b.accepts_graphemes("aa"));
+    /// assert!(!a_or_b.accepts_graphemes("ab"));
+    /// assert!(!a_or_b.accepts_graphemes("ba"));
+    /// assert!(a_or_b.accepts_graphemes("bb"));
+    /// ```
+    pub fn symmetric_difference(&self, other: &Self) -> Option<Self> {
+        self.product_construction(other, |s1, s2| s1.accepting != s2.accepting)
+    }
+
+    /// Constructs a new DFA from two DFAs using the product construction. That is a new DFA with states corresponding
+    /// to both the state the first DFA and the second DFA would be in on any given input. If that state is an accepting
+    /// state or not is given by the `combinator` function, combining the state from the first parser and the second
+    /// parser. `self.product_construction(other, |s1, s2| s1.is_accepting() && s2.is_accepting())` corresponds to
+    /// the intersection between the two.
+    pub fn product_construction(
+        &self,
+        other: &Self,
+        mut combinator: impl FnMut(&DfaState, &DfaState) -> bool,
+    ) -> Option<Self> {
+        //if the alphabets are different, they aren't equivalent
+        if self.alphabet.len() != other.alphabet.len() {
+            return None;
+        }
+
+        let set1 = self.alphabet.iter().collect::<HashSet<_>>();
+        let set2 = other.alphabet.iter().collect::<HashSet<_>>();
+        if set1 != set2 {
+            return None;
+        }
+
+        // initially, we explore the (pair of) initial states
+        let mut evaluators_to_explore = vec![(self.evaluator(), other.evaluator())];
+        // initial state pair
+        let q1 = self.initial_state;
+        let q2 = other.initial_state;
+        let mut explored_states = HashSet::new();
+        explored_states.insert((q1, q2));
+
+        // maps (q1, q2) to accepting?
+        let mut state_data = vec![];
+
+        while let Some((s1, s2)) = evaluators_to_explore.pop() {
+            let mut transition_list = Vec::with_capacity(self.alphabet.len());
+            for elem in self.alphabet.iter() {
+                let mut d1 = s1.clone();
+                d1.step(elem);
+                let mut d2 = s2.clone();
+                d2.step(elem);
+                let states = (d1.current_state_idx(), d2.current_state_idx());
+                transition_list.push(states);
+                if explored_states.insert(states) {
+                    evaluators_to_explore.push((d1, d2));
+                }
+            }
+
+            state_data.push((
+                (s1.current_state_idx(), s2.current_state_idx()),
+                combinator(s1.current_state(), s2.current_state()),
+                transition_list,
+            ));
+        }
+
+        // Try to generate new names for states
+        let names = {
+            let mut hm = HashSet::new();
+            let potential_names = explored_states
+                .iter()
+                .map_while(|(s1, s2)| {
+                    let combined_name: Rc<str> = Rc::from(format!(
+                        "({},{})",
+                        self.states[*s1].name, other.states[*s2].name
+                    ));
+                    hm.insert(combined_name.clone())
+                        .then_some(((*s1, *s2), combined_name))
+                })
+                .collect::<HashMap<_, _>>();
+            if potential_names.len() < state_data.len() {
+                explored_states
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, (s1, s2))| ((*s1, *s2), Rc::from(format!("{idx}"))))
+                    .collect()
+            } else {
+                potential_names
+            }
+        };
+
+        let rev_state_idx_map = state_data
+            .iter()
+            .enumerate()
+            .map(|(idx, ((s1, s2), _, _))| ((*s1, *s2), idx))
+            .collect::<HashMap<_, _>>();
+        let initial_state = *rev_state_idx_map
+            .get(&(q1, q2))
+            .expect("Initial state should have an index");
+
+        let states = state_data
+            .into_iter()
+            .map(|(states, accepting, transitions)| DfaState {
+                name: names
+                    .get(&states)
+                    .expect("All states should have a name")
+                    .clone(),
+                initial: states == (q1, q2),
+                accepting,
+                transitions: transitions
+                    .into_iter()
+                    .map(|states| {
+                        *rev_state_idx_map
+                            .get(&states)
+                            .expect("Each state pair with transition to it should have a idx")
+                    })
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        Some(Dfa {
+            alphabet: self.alphabet.clone(),
+            states,
+            initial_state,
+        })
+    }
+
     /// Minimizes this DFA by first removing all unreachable states and then merging non-distinguishable states
     pub fn minimize(&mut self) {
         self.remove_unreachable_states();
@@ -237,17 +482,42 @@ impl Dfa {
     /// Finds the unreachable states, that is, all states that cannot be reached by any input to the automata, and
     /// returns them as indices
     pub fn unreachable_state_idx(&self) -> HashSet<usize> {
-        let mut unreachables = (0..self.states.len()).collect::<HashSet<_>>();
-        unreachables.remove(&self.initial_state);
-        let mut new_states = HashSet::from([self.initial_state]);
+        let reachables = self.reachable_state_idx();
+        (0..self.states.len())
+            .filter(|x| !reachables.contains(x))
+            .collect()
+    }
+
+    /// Checks if this DFA has an accepting state that is reachable from the initial state, that is, if it has some
+    /// input which it accepts
+    pub fn has_reachable_accepting_state(&self) -> bool {
+        // Use _idx to not allocate Vec
+        self.reachable_state_idx()
+            .iter()
+            .any(|idx| self.states[*idx].accepting)
+    }
+
+    /// Finds the reachable states, that is, all states that can be reached by some input to the automata
+    pub fn reachable_states(&self) -> Vec<&DfaState> {
+        self.reachable_state_idx()
+            .into_iter()
+            .map(|idx| &self.states[idx])
+            .collect()
+    }
+
+    /// Finds the reachable states, that is, all states that can be reached by some input to the automata, and
+    /// returns them as indices
+    pub fn reachable_state_idx(&self) -> HashSet<usize> {
+        let mut reachables = HashSet::from([self.initial_state]);
+        let mut new_states = reachables.clone();
         while !new_states.is_empty() {
             new_states = new_states
                 .drain()
                 .flat_map(|state| self.states[state].transitions.iter().copied())
-                .filter(|state| unreachables.remove(state))
+                .filter(|&state| reachables.insert(state))
                 .collect();
         }
-        unreachables
+        reachables
     }
 
     /// Remaps the transitions so that any transition to n gets mapped to mapper(n) (if any, otherwise n is preserved)
@@ -264,7 +534,8 @@ impl Dfa {
     /// of the remaining states to the new state indices. There should not be any transitions to any of the states
     /// that are to be removed (except for in any of the states that are to be removed). If there is, transitions may be
     /// undefined after this call. If debug_assertions is enabled, such errors would cause a panic here, otherwise they
-    /// would not be and the DFA might panic at a later stage
+    /// would not immediately panic but other operations might panic at a later stage. The initial state cannot be
+    /// removed and will cause a panic if attempted to.
     fn remove_states(&mut self, mut to_remove: Vec<usize>) {
         let mut old_state_idx = (0..self.states.len()).collect::<Vec<_>>();
 
@@ -384,6 +655,8 @@ impl Dfa {
     /// Checks if this DFA is equivalent to another DFA, that is, if they accept the same language.
     /// If the automatons have different alphabets they are never equivalent, but the order of the alphabet,
     /// the number of states and the transitions doesn't matter.
+    // We could check intersection between one DFA and second DFA complement, and check if it is 0
+    // but that would lead to a slowdown of 3964%, so we keep it as is
     pub fn equivalent_to(&self, other: &Dfa) -> bool {
         //if the alphabets are different, they aren't equivalent
         if self.alphabet.len() != other.alphabet.len() {
@@ -426,7 +699,7 @@ impl Dfa {
 
     /// Gets the alphabet of this DFA
     pub fn alphabet(&self) -> &[Rc<str>] {
-        self.alphabet.as_slice()
+        &self.alphabet
     }
 
     /// Gets the states of this DFA
