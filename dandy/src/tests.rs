@@ -12,11 +12,11 @@ use std::rc::Rc;
 fn test_subset_construction() {
     let dfa_source = include_str!("../tests/test_files/eq_to_nfa1.dfa");
     let parsed_dfa = parser::dfa(dfa_source).unwrap();
-    let dfa: dfa::Dfa = parsed_dfa.try_into().unwrap();
+    let dfa: Dfa = parsed_dfa.try_into().unwrap();
 
     let nfa_source = include_str!("../tests/test_files/nfa1.nfa");
     let parsed_nfa = parser::nfa(nfa_source).unwrap();
-    let nfa: nfa::Nfa = parsed_nfa.try_into().unwrap();
+    let nfa: Nfa = parsed_nfa.try_into().unwrap();
 
     let converted = nfa.to_dfa();
     assert!(dfa.equivalent_to(&converted));
@@ -104,6 +104,8 @@ proptest! {
         dfa in fixed_alphabet_dfa(20, 'a'..='f', ('a'..='f').count()),
         tests in prop::collection::vec("[a-f]+", 100)
     ) {
+        // dfa OR !dfa should accept everything
+        // dfa AND !dfa should accept nothing
         let inv_dfa = {
             let mut dfa = dfa.clone();
             dfa.invert();
@@ -111,11 +113,11 @@ proptest! {
         };
         let union = dfa.union(&inv_dfa).unwrap();
         let intersection = dfa.intersection(&inv_dfa).unwrap();
+        assert!(union.has_reachable_accepting_state());
+        assert!(!intersection.has_reachable_accepting_state());
         tests.iter().for_each(|test| {
             assert!(union.accepts_graphemes(test));
-            assert!(union.has_reachable_accepting_state());
             assert!(!intersection.accepts_graphemes(test));
-            assert!(!intersection.has_reachable_accepting_state());
         });
     }
 
