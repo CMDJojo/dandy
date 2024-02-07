@@ -1,14 +1,17 @@
-use clap::{Parser, ValueEnum};
+mod automata;
+mod equivalence;
+mod intersection;
+mod union;
+
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use dandy::dfa::parse::DfaParseError;
 use dandy::dfa::Dfa;
 use dandy::nfa::parse::NfaParseError;
 use dandy::nfa::Nfa;
 use dandy::parser;
-use std::fmt::Display;
+use equivalence::EquivalenceResult;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
-use thiserror::Error;
 
 /// This command can be used to run operations on DFAs or NFAs.
 ///
@@ -26,7 +29,32 @@ use thiserror::Error;
     about = "A cli tool for importing and checking DFAs and NFAs",
     long_about
 )]
-struct Args {
+struct DandyArgs {
+    #[arg(
+        short,
+        long = "out",
+        help = "Outputs the result of the command into a file"
+    )]
+    out_file: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "Disables additional logging (but still outputs result to stdout)",
+        default_value_t
+    )]
+    no_log: bool,
+    #[command(subcommand)]
+    command: Operation,
+}
+
+#[derive(Debug, Subcommand)]
+enum Operation {
+    Equivalence(EquivalenceArgs),
+    Union(UnionArgs),
+    Intersection(IntersectionArgs),
+}
+
+#[derive(Debug, Args)]
+struct EquivalenceArgs {
     #[arg(
         short,
         long,
@@ -42,23 +70,23 @@ struct Args {
         help = "Choose if testing DFAs, NFAs or Regexes"
     )]
     r#type: FaType,
+    //#[arg(
+    //    short,
+    //    long,
+    //    value_enum,
+    //    default_value_t,
+    //    help = "(For 'test' operation): Choose if all lines or one line per file must be accepted by the automata"
+    //)]
+    //condition: TestType,
+    //#[arg(
+    //    help = "Choose if you want to check what files define automata equivalent to the given automata, or what files has lines accepted by the automata",
+    //)]
+    //operation: OpType,
     #[arg(
         short,
         long,
-        value_enum,
         default_value_t,
-        help = "(For 'test' operation): Choose if all lines or one line per file must be accepted by the automata"
-    )]
-    condition: TestType,
-    #[arg(
-        help = "Choose if you want to check what files define automata equivalent to the given automata, or what files has lines accepted by the automata"
-    )]
-    operation: OpType,
-    #[arg(
-        short,
-        long,
-        default_value_t,
-        help = "(For 'equivalence' operation, for 'DFA' test type only): Requires the DFAs to be minimized"
+        help = "(For 'DFA' test type only): Requires the DFAs to be minimized"
     )]
     minimized: bool,
     #[arg(
@@ -76,6 +104,18 @@ struct Args {
     automata: PathBuf,
     #[arg()]
     files: Vec<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct UnionArgs {
+    first_dfa: PathBuf,
+    second_dfa: PathBuf,
+}
+
+#[derive(Debug, Args)]
+struct IntersectionArgs {
+    first_dfa: PathBuf,
+    second_dfa: PathBuf,
 }
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -100,15 +140,25 @@ enum TestType {
 }
 
 fn main() {
-    let args = Args::parse();
-    let file = fs::read_to_string(&args.automata);
+    let args = DandyArgs::parse();
+    match &args.command {
+        Operation::Equivalence(eq_args) => {
+            // We want to read the input file here to get enough lifetime for the error
+            let file = fs::read_to_string(&eq_args.automata).unwrap();
+            equivalence::equivalence(&args, eq_args, &file)
+        }
+        Operation::Union(union_args) => union::union(&args, union_args),
+        Operation::Intersection(inters_args) => intersection::intersection(&args, inters_args),
+    };
+
+    /*let file = fs::read_to_string(&args.automata);
     match file {
         Err(e) => {
             eprintln!("Error reading input file: {e}");
         }
         Ok(f) => match args.operation {
             OpType::Equivalence => {
-                if let Err(e) = equivalence(&args, &f) {
+                if let Err(e) = equivalence::equivalence(&args, &f) {
                     eprintln!("Could not start test: {e}")
                 }
             }
@@ -116,87 +166,10 @@ fn main() {
                 test(&args, &f);
             }
         },
-    }
+    }*/
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum EquivalenceResult {
-    FailedToRead(String),
-    FailedToParse(String),
-    FailedToValidate(String),
-    NotEquivalent,
-    NotMinimized,
-    Equivalent,
-}
-
-impl Display for EquivalenceResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use EquivalenceResult::*;
-        match self {
-            FailedToRead(s) => write!(f, "Failed to read ({s})"),
-            FailedToParse(s) => write!(f, "Failed to parse ({s})"),
-            FailedToValidate(s) => write!(f, "Failed to validate ({s})"),
-            NotEquivalent => write!(f, "Not Equivalent"),
-            NotMinimized => write!(f, "Equivalent but not minimized"),
-            Equivalent => write!(f, "Equivalent"),
-        }
-    }
-}
-
-fn equivalence<'a>(args: &Args, file: &'a str) -> Result<(), TesterError<'a>> {
-    let tester = DandyTester::new(file, args)?;
-    #[allow(unused_variables)]
-    let log = |s: &str| {
-        if !args.no_log {
-            println!("{s}")
-        }
-    };
-    macro_rules! log {
-        ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
-    }
-
-    log!("Input loaded:");
-    log!("{}", tester.input_automata().table());
-
-    let start = SystemTime::now();
-    let results = args
-        .files
-        .iter()
-        .map(|path| (path, tester.test_equivalence(path)))
-        .collect::<Vec<_>>();
-    let duration = SystemTime::now().duration_since(start).unwrap_or_default();
-
-    log!(
-        "Testing of {} files done in {}ms. Results:",
-        args.files.len(),
-        duration.as_millis()
-    );
-
-    let successes = results.into_iter().fold(0usize, |acc, (path, result)| {
-        let res = if args.bool {
-            format!("{}", result == EquivalenceResult::Equivalent)
-        } else {
-            result.to_string()
-        };
-        if let Some(prefix) = last_n_components(path, args.path_length) {
-            println!("{prefix}: {res}");
-        } else {
-            println!("{res}");
-        }
-
-        if result == EquivalenceResult::Equivalent {
-            acc + 1
-        } else {
-            acc
-        }
-    });
-
-    log!("{}/{} files passed", successes, args.files.len());
-
-    Ok(())
-}
-
-fn last_n_components(path: &Path, n: Option<usize>) -> Option<String> {
+pub fn last_n_components(path: &Path, n: Option<usize>) -> Option<String> {
     let Some(n) = n else {
         return Some(path.display().to_string());
     };
@@ -209,88 +182,6 @@ fn last_n_components(path: &Path, n: Option<usize>) -> Option<String> {
             .display()
             .to_string()
     })
-}
-
-struct DandyTester {
-    input: Automata,
-    minimized: bool,
-    test_type: FaType,
-}
-
-impl DandyTester {
-    fn input_automata(&self) -> &Automata {
-        &self.input
-    }
-
-    fn new<'a>(file: &'a str, args: &Args) -> Result<DandyTester, TesterError<'a>> {
-        let mut input = match args.in_type.unwrap_or(args.r#type) {
-            FaType::Dfa => {
-                let dfa = parser::dfa(file)
-                    .map_err(TesterError::DfaParseError)?
-                    .try_into()
-                    .map_err(TesterError::DfaError)?;
-                Automata::Dfa(dfa)
-            }
-            FaType::Nfa => {
-                let nfa = parser::nfa(file)
-                    .map_err(TesterError::NfaParseError)?
-                    .try_into()
-                    .map_err(TesterError::NfaError)?;
-                Automata::Nfa(nfa)
-            }
-            FaType::Regex => {
-                let regex = parser::regex(file).map_err(TesterError::RegexParseError)?;
-                let nfa = regex.to_nfa();
-                let dfa = nfa.to_dfa(); // To reduce states, regex->nfa can produce MANY states
-                Automata::Dfa(dfa)
-            }
-        };
-
-        let minimized = if args.minimized {
-            if args.r#type == FaType::Dfa {
-                input = input.into_minimized_dfa();
-                true
-            } else {
-                return Err(TesterError::InvalidMinimizedConfig);
-            }
-        } else {
-            false
-        };
-
-        input = input.prepare_to_compare_with(args.r#type);
-
-        Ok(Self {
-            input,
-            minimized,
-            test_type: args.r#type,
-        })
-    }
-
-    fn test_equivalence(&self, file: &Path) -> EquivalenceResult {
-        match fs::read_to_string(file) {
-            Err(e) => EquivalenceResult::FailedToRead(e.to_string()),
-            Ok(f) => match Automata::load_test(&f, self.test_type) {
-                Ok(automata) => self.input.test_equivalence(&automata, self.minimized),
-                Err(res) => res,
-            },
-        }
-    }
-}
-
-#[derive(Error, Debug)]
-enum TesterError<'a> {
-    #[error("Error parsing DFA: {0:?}")]
-    DfaParseError(nom::error::Error<&'a str>),
-    #[error("Error compiling DFA: {0}")]
-    DfaError(DfaParseError<'a>),
-    #[error("Error parsing NFA: {0:?}")]
-    NfaParseError(nom::error::Error<&'a str>),
-    #[error("Error compiling NFA: {0}")]
-    NfaError(NfaParseError<'a>),
-    #[error("Error parsing regular expression: {0:?}")]
-    RegexParseError(nom::error::Error<&'a str>),
-    #[error("--minimized option can only be used when testing DFAs")]
-    InvalidMinimizedConfig,
 }
 
 enum Automata {
@@ -330,7 +221,7 @@ impl Automata {
     }
 
     fn test_equivalence(&self, other: &Self, minimized: bool) -> EquivalenceResult {
-        use EquivalenceResult::*;
+        use equivalence::EquivalenceResult::*;
         match &self {
             Automata::Dfa(this_dfa) => {
                 match other {
@@ -428,10 +319,6 @@ impl Automata {
             Automata::Nfa(nfa) => nfa.to_table(),
         }
     }
-}
-
-fn test(_args: &Args, _file: &str) {
-    unimplemented!("'test' is not implemented")
 }
 
 // Code from readme to check validity
