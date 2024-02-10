@@ -101,6 +101,59 @@ impl Regex {
         }
     }
 
+    pub fn to_string(&self) -> String {
+        let mut acc = String::new();
+        Self::build_string(&self.tree, &mut acc);
+        acc
+    }
+
+    fn build_string(tree: &RegexTree, acc: &mut String) {
+        match tree {
+            RegexTree::Sequence(seq) => {
+                for item in seq {
+                    Self::build_string(item, acc);
+                }
+            }
+            RegexTree::Alt(seq) => {
+                acc.push('(');
+                let mut iter = seq.iter();
+                if let Some(first) = iter.next() {
+                    Self::build_string(first, acc);
+                    for item in iter {
+                        acc.push('|');
+                        Self::build_string(item, acc);
+                    }
+                }
+                acc.push(')');
+            }
+            RegexTree::Repeat(seq) => {
+                acc.push('(');
+                Self::build_string(seq, acc);
+                acc.push(')');
+                acc.push('*');
+            }
+            RegexTree::Char(c) => match c {
+                RegexChar::Epsilon => {
+                    acc.push('ε');
+                }
+                RegexChar::Empty => {
+                    acc.push('∅');
+                }
+                RegexChar::Grapheme(g) => {
+                    if g.len() == 1
+                        && ['(', ')', '∅', 'ε', '|', '*', '+', '\\']
+                            .contains(&g.chars().next().unwrap())
+                    {
+                        acc.push('\\');
+                        acc.push_str(g);
+                    } else {
+                        acc.push_str(g);
+                    }
+                }
+            },
+        }
+    }
+
     /// We turn a tree to a NFA recursively. `counter` is used to get the number of the next state.
     /// `char_idx` gives the index of a given character in the alphabet (and inserts the character
     /// if it didn't exist already). `send_to` is the state that the subtree should transition to

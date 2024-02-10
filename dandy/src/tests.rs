@@ -123,7 +123,7 @@ proptest! {
 
     #[test]
     fn regex(
-        regex_str in random_regex(),
+        regex_str in random_regex("[a-z]"),
         tests in prop::collection::vec("[a-z]+", 20)
     ) {
         let regex = parser::regex(&regex_str).unwrap();
@@ -139,6 +139,14 @@ proptest! {
             let s = test.chars().filter(|c| accepted_chars.contains(c)).collect::<String>();
             assert_eq!(dfa.accepts_graphemes(&s), lib_regex.is_match(&s));
         })
+    }
+
+    #[test]
+    fn regex_parse(regex_str in random_regex("[a-zε∅]")) {
+        let parse1 = parser::regex(&regex_str).unwrap();
+        let stringified = parse1.to_string();
+        let parse2 = parser::regex(&stringified).unwrap();
+        assert!(parse1.to_nfa().equivalent_to(&parse2.to_nfa()));
     }
 }
 
@@ -328,8 +336,8 @@ prop_compose! {
     }
 }
 
-fn random_regex() -> impl Strategy<Value = String> {
-    "[a-z]".prop_recursive(20, 1024, 20, |inner| {
+fn random_regex(base: &'static str) -> impl Strategy<Value = String> {
+    base.prop_recursive(20, 1024, 20, |inner| {
         prop_oneof![
             10 => prop::collection::vec(inner.clone(), 1..20)
                 .prop_map(|vec| format!("({})", vec.join(""))),
