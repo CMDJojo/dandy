@@ -391,6 +391,7 @@ impl Dfa {
         self.remap_transitions(map);
         if let Some(new_initial) = map(self.initial_state) {
             self.initial_state = new_initial;
+            self.states[new_initial].initial = true;
         }
         let to_remove = mapper.into_keys().collect();
         self.remove_states(to_remove);
