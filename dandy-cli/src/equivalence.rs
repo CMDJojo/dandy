@@ -1,12 +1,13 @@
-use crate::{Automata, DandyArgs, EquivalenceArgs, FaType};
+use crate::{automata::Automata, DandyArgs, EquivalenceArgs};
 use dandy::dfa::parse::DfaParseError;
 use dandy::nfa::parse::NfaParseError;
 use dandy::parser;
 use std::fmt::Display;
-use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
+use std::{fs, io};
 use thiserror::Error;
+use crate::automata::AutomataType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EquivalenceResult {
@@ -32,24 +33,25 @@ impl Display for EquivalenceResult {
     }
 }
 
-pub fn equivalence<'a>(main_args: &DandyArgs, args: &EquivalenceArgs, file: &str) {
-    run_equivalence(main_args, args, file).unwrap();
-}
-
-fn run_equivalence<'a>(
-    _main_args: &DandyArgs,
+pub fn equivalence<'a>(
+    main_args: &DandyArgs,
     args: &EquivalenceArgs,
-    file: &'a str,
-) -> Result<(), Error<'a>> {
-    let tester = DandyTester::new(&file, args)?;
+    mut output: impl FnMut(&str),
+) -> Result<(), String> {
+    let file = fs::read_to_string(&args.automata).map_err(|e| Error::InputFile(e).to_string())?;
+
+    let tester = DandyTester::new(&file, args).map_err(|e| e.to_string())?;
     #[allow(unused_variables)]
     let log = |s: &str| {
-        if !args.no_log {
+        if !main_args.no_log {
             println!("{s}")
         }
     };
     macro_rules! log {
-        ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+        ($($t:tt)*) => (log(&format!($($t)*)))
+    }
+    macro_rules! output {
+        ($($t:tt)*) => (output(&format!($($t)*)))
     }
 
     log!("Input loaded:");
@@ -76,9 +78,9 @@ fn run_equivalence<'a>(
             result.to_string()
         };
         if let Some(prefix) = crate::last_n_components(path, args.path_length) {
-            println!("{prefix}: {res}");
+            output!("{prefix}: {res}");
         } else {
-            println!("{res}");
+            output!("{res}");
         }
 
         if result == EquivalenceResult::Equivalent {
@@ -96,7 +98,7 @@ fn run_equivalence<'a>(
 struct DandyTester {
     input: Automata,
     minimized: bool,
-    test_type: FaType,
+    test_type: AutomataType,
 }
 
 impl DandyTester {
@@ -106,22 +108,22 @@ impl DandyTester {
 
     fn new<'a>(file: &'a str, args: &EquivalenceArgs) -> Result<DandyTester, Error<'a>> {
         let mut input = match args.in_type.unwrap_or(args.r#type) {
-            FaType::Dfa => {
+            AutomataType::Dfa => {
                 let dfa = parser::dfa(file)
-                    .map_err(Error::DfaParseError)?
+                    .map_err(Error::DfaParse)?
                     .try_into()
-                    .map_err(Error::DfaError)?;
+                    .map_err(Error::Dfa)?;
                 Automata::Dfa(dfa)
             }
-            FaType::Nfa => {
+            AutomataType::Nfa => {
                 let nfa = parser::nfa(file)
-                    .map_err(Error::NfaParseError)?
+                    .map_err(Error::NfaParse)?
                     .try_into()
-                    .map_err(Error::NfaError)?;
+                    .map_err(Error::Nfa)?;
                 Automata::Nfa(nfa)
             }
-            FaType::Regex => {
-                let regex = parser::regex(file).map_err(Error::RegexParseError)?;
+            AutomataType::Regex => {
+                let regex = parser::regex(file).map_err(Error::RegexParse)?;
                 let nfa = regex.to_nfa();
                 let dfa = nfa.to_dfa(); // To reduce states, regex->nfa can produce MANY states
                 Automata::Dfa(dfa)
@@ -129,8 +131,8 @@ impl DandyTester {
         };
 
         let minimized = if args.minimized {
-            if args.r#type == FaType::Dfa {
-                input = input.into_minimized_dfa();
+            if args.r#type == AutomataType::Dfa {
+                (input, _) = input.to_minimized_dfa_automata();
                 true
             } else {
                 return Err(Error::InvalidMinimizedConfig);
@@ -139,7 +141,7 @@ impl DandyTester {
             false
         };
 
-        input = input.prepare_to_compare_with(args.r#type);
+        (input, _) = input.prepare_to_compare_with(args.r#type);
 
         Ok(Self {
             input,
@@ -152,7 +154,7 @@ impl DandyTester {
         match fs::read_to_string(file) {
             Err(e) => EquivalenceResult::FailedToRead(e.to_string()),
             Ok(f) => match Automata::load_test(&f, self.test_type) {
-                Ok(automata) => self.input.test_equivalence(&automata, self.minimized),
+                Ok(automata) => self.input.test_equivalence(automata, self.minimized),
                 Err(res) => res,
             },
         }
@@ -160,17 +162,19 @@ impl DandyTester {
 }
 
 #[derive(Error, Debug)]
-enum Error<'a> {
+pub enum Error<'a> {
     #[error("Error parsing DFA: {0:?}")]
-    DfaParseError(nom::error::Error<&'a str>),
+    DfaParse(nom::error::Error<&'a str>),
     #[error("Error compiling DFA: {0}")]
-    DfaError(DfaParseError<'a>),
+    Dfa(DfaParseError<'a>),
     #[error("Error parsing NFA: {0:?}")]
-    NfaParseError(nom::error::Error<&'a str>),
+    NfaParse(nom::error::Error<&'a str>),
     #[error("Error compiling NFA: {0}")]
-    NfaError(NfaParseError<'a>),
+    Nfa(NfaParseError<'a>),
     #[error("Error parsing regular expression: {0:?}")]
-    RegexParseError(nom::error::Error<&'a str>),
+    RegexParse(nom::error::Error<&'a str>),
     #[error("--minimized option can only be used when testing DFAs")]
     InvalidMinimizedConfig,
+    #[error("Error reading input file: {0}")]
+    InputFile(#[from] io::Error),
 }

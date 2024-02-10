@@ -1,17 +1,16 @@
 mod automata;
+mod binary_op;
 mod equivalence;
-mod intersection;
-mod union;
-
+use automata::AutomataType;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use dandy::dfa::parse::DfaParseError;
 use dandy::dfa::Dfa;
-use dandy::nfa::parse::NfaParseError;
-use dandy::nfa::Nfa;
 use dandy::parser;
-use equivalence::EquivalenceResult;
-use std::fs;
+use std::fmt;
+use std::fmt::Formatter;
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 
 /// This command can be used to run operations on DFAs or NFAs.
 ///
@@ -37,7 +36,7 @@ struct DandyArgs {
     )]
     out_file: Option<PathBuf>,
     #[arg(
-        long,
+        long = "less-logs",
         help = "Disables additional logging (but still outputs result to stdout)",
         default_value_t
     )]
@@ -49,8 +48,48 @@ struct DandyArgs {
 #[derive(Debug, Subcommand)]
 enum Operation {
     Equivalence(EquivalenceArgs),
-    Union(UnionArgs),
-    Intersection(IntersectionArgs),
+    Union(BinaryOpArgs),
+    Intersection(BinaryOpArgs),
+    Difference(BinaryOpArgs),
+    SymmetricDifference(BinaryOpArgs),
+}
+
+impl Operation {
+    fn binary_operation(&self) -> Option<BinaryOperation> {
+        use BinaryOperation::*;
+        match self {
+            Operation::Union(_) => Some(Union),
+            Operation::Intersection(_) => Some(Intersection),
+            Operation::Difference(_) => Some(Difference),
+            Operation::SymmetricDifference(_) => Some(SymmetricDifference),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum BinaryOperation {
+    Union,
+    Intersection,
+    Difference,
+    SymmetricDifference,
+}
+
+impl BinaryOperation {
+    fn as_str(&self) -> &'static str {
+        match self {
+            BinaryOperation::Union => "Union",
+            BinaryOperation::Intersection => "Intersection",
+            BinaryOperation::Difference => "Difference",
+            BinaryOperation::SymmetricDifference => "Symmetric difference",
+        }
+    }
+}
+
+impl fmt::Display for BinaryOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 #[derive(Debug, Args)]
@@ -61,7 +100,7 @@ struct EquivalenceArgs {
         value_enum,
         help = "Choose the input type of the correct answer (defaults to the same as the test type)"
     )]
-    in_type: Option<FaType>,
+    in_type: Option<AutomataType>,
     #[arg(
         short,
         long,
@@ -69,7 +108,7 @@ struct EquivalenceArgs {
         default_value_t,
         help = "Choose if testing DFAs, NFAs or Regexes"
     )]
-    r#type: FaType,
+    r#type: AutomataType,
     //#[arg(
     //    short,
     //    long,
@@ -96,8 +135,6 @@ struct EquivalenceArgs {
         help = "Output 'true'/'false' rather than a result in text format"
     )]
     r#bool: bool,
-    #[arg(long, default_value_t, help = "Disables additional logging")]
-    no_log: bool,
     #[arg(short, long, help = "How many path components to print (0 to disable)")]
     path_length: Option<usize>,
     #[arg()]
@@ -107,23 +144,18 @@ struct EquivalenceArgs {
 }
 
 #[derive(Debug, Args)]
-struct UnionArgs {
-    first_dfa: PathBuf,
-    second_dfa: PathBuf,
-}
-
-#[derive(Debug, Args)]
-struct IntersectionArgs {
-    first_dfa: PathBuf,
-    second_dfa: PathBuf,
-}
-
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-enum FaType {
-    #[default]
-    Dfa,
-    Nfa,
-    Regex,
+struct BinaryOpArgs {
+    #[arg(short, long, value_enum, default_value_t = AutomataType::Dfa)]
+    r#type: AutomataType,
+    #[arg(short, long)]
+    second_type: Option<AutomataType>,
+    #[arg(long, value_enum, default_value_t = AutomataType::Dfa)]
+    compared_type: AutomataType,
+    #[arg(short, long, default_value_t)]
+    minimized: bool,
+    first: PathBuf,
+    second: PathBuf,
+    compare_against: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -141,32 +173,51 @@ enum TestType {
 
 fn main() {
     let args = DandyArgs::parse();
-    match &args.command {
-        Operation::Equivalence(eq_args) => {
-            // We want to read the input file here to get enough lifetime for the error
-            let file = fs::read_to_string(&eq_args.automata).unwrap();
-            equivalence::equivalence(&args, eq_args, &file)
-        }
-        Operation::Union(union_args) => union::union(&args, union_args),
-        Operation::Intersection(inters_args) => intersection::intersection(&args, inters_args),
+
+    let mut out_file = args
+        .out_file
+        .as_ref()
+        .and_then(|path| match File::create(path) {
+            Ok(f) => Some(f),
+            Err(e) => {
+                eprintln!("Error creating output file {e}");
+                eprintln!("Execution will continue but no data will be written to file");
+                None
+            }
+        });
+
+    let mut sink = |s: &str| {
+        println!("{s}");
+        if let Some(f) = out_file.as_mut() {
+            f.write_all(s.as_bytes()).unwrap();
+        };
     };
 
-    /*let file = fs::read_to_string(&args.automata);
-    match file {
-        Err(e) => {
-            eprintln!("Error reading input file: {e}");
+    let result = match &args.command {
+        Operation::Equivalence(eq_args) => {
+            equivalence::equivalence(&args, eq_args, &mut sink).map_err(Error::Equivalence)
         }
-        Ok(f) => match args.operation {
-            OpType::Equivalence => {
-                if let Err(e) = equivalence::equivalence(&args, &f) {
-                    eprintln!("Could not start test: {e}")
-                }
-            }
-            OpType::Test => {
-                test(&args, &f);
-            }
-        },
-    }*/
+        Operation::Union(bin_args)
+        | Operation::Intersection(bin_args)
+        | Operation::Difference(bin_args)
+        | Operation::SymmetricDifference(bin_args) => {
+            let operation = args.command.binary_operation().unwrap();
+            binary_op::binary_op(&args, bin_args, operation, &mut sink)
+                .map_err(|e| Error::Binary(operation, e))
+        }
+    };
+
+    if let Err(e) = result {
+        eprintln!("{e}");
+    }
+}
+
+#[derive(Debug, Error)]
+enum Error {
+    #[error("Error in Equivalence: {0}")]
+    Equivalence(String),
+    #[error("Error in {0}: {1}")]
+    Binary(BinaryOperation, String),
 }
 
 pub fn last_n_components(path: &Path, n: Option<usize>) -> Option<String> {
@@ -182,143 +233,6 @@ pub fn last_n_components(path: &Path, n: Option<usize>) -> Option<String> {
             .display()
             .to_string()
     })
-}
-
-enum Automata {
-    Dfa(Dfa),
-    Nfa(Nfa),
-}
-
-impl Automata {
-    fn load_test(file: &str, r#type: FaType) -> Result<Self, EquivalenceResult> {
-        match r#type {
-            FaType::Dfa => {
-                let dfa = parser::dfa(file)
-                    .map_err(|e| EquivalenceResult::FailedToParse(e.to_string()))?
-                    .try_into()
-                    .map_err(|e: DfaParseError| {
-                        EquivalenceResult::FailedToValidate(e.to_string())
-                    })?;
-                Ok(Automata::Dfa(dfa))
-            }
-            FaType::Nfa => {
-                let nfa = parser::nfa(file)
-                    .map_err(|e| EquivalenceResult::FailedToParse(e.to_string()))?
-                    .try_into()
-                    .map_err(|e: NfaParseError| {
-                        EquivalenceResult::FailedToValidate(e.to_string())
-                    })?;
-                Ok(Automata::Nfa(nfa))
-            }
-            FaType::Regex => {
-                let regex = parser::regex(file)
-                    .map_err(|e| EquivalenceResult::FailedToParse(e.to_string()))?;
-                let nfa = regex.to_nfa();
-                Ok(Automata::Nfa(nfa)) // We don't really need to reduce states here as much, since
-                                       // base testing with has fewer states
-            }
-        }
-    }
-
-    fn test_equivalence(&self, other: &Self, minimized: bool) -> EquivalenceResult {
-        use equivalence::EquivalenceResult::*;
-        match &self {
-            Automata::Dfa(this_dfa) => {
-                match other {
-                    Automata::Dfa(other_dfa) => {
-                        if this_dfa.equivalent_to(other_dfa) {
-                            if this_dfa.states().len() == other_dfa.states().len() || !minimized {
-                                Equivalent
-                            } else {
-                                NotMinimized
-                            }
-                        } else {
-                            NotEquivalent
-                        }
-                    }
-                    Automata::Nfa(other_nfa) => {
-                        eprintln!("Comparing this (DFA) to other (NFA), performance inpact, shouldn't happen");
-                        if minimized {
-                            eprintln!("Trying to compare minimization of NFA, can't be done");
-                        }
-                        let this_nfa = this_dfa.clone().to_nfa();
-                        if this_nfa.equivalent_to(other_nfa) {
-                            Equivalent
-                        } else {
-                            NotEquivalent
-                        }
-                    }
-                }
-            }
-            Automata::Nfa(this_nfa) => {
-                match other {
-                    Automata::Dfa(other_dfa) => {
-                        eprintln!("Comparing this (NFA) to other (DFA), performance impact, shouldn't happen");
-                        let mut this_dfa = this_nfa.to_dfa();
-                        if minimized {
-                            this_dfa.minimize();
-                        }
-                        if this_dfa.equivalent_to(other_dfa) {
-                            if this_dfa.states().len() == other_dfa.states().len() || !minimized {
-                                Equivalent
-                            } else {
-                                NotMinimized
-                            }
-                        } else {
-                            NotEquivalent
-                        }
-                    }
-                    Automata::Nfa(other_nfa) => {
-                        if minimized {
-                            eprintln!("Trying to compare minimization of NFA, can't be done");
-                        }
-                        if this_nfa.equivalent_to(other_nfa) {
-                            Equivalent
-                        } else {
-                            NotEquivalent
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn into_minimized_dfa(self) -> Self {
-        let mut dfa = match self {
-            Automata::Dfa(dfa) => dfa,
-            Automata::Nfa(nfa) => nfa.to_dfa(),
-        };
-        dfa.minimize();
-        Automata::Dfa(dfa)
-    }
-
-    fn prepare_to_compare_with(self, other: FaType) -> Self {
-        match other {
-            FaType::Dfa => self.into_dfa(),
-            FaType::Nfa | FaType::Regex => self.into_nfa(),
-        }
-    }
-
-    fn into_dfa(self) -> Self {
-        match self {
-            Automata::Dfa(dfa) => Automata::Dfa(dfa),
-            Automata::Nfa(nfa) => Automata::Dfa(nfa.to_dfa()),
-        }
-    }
-
-    fn into_nfa(self) -> Self {
-        match self {
-            Automata::Dfa(dfa) => Automata::Nfa(dfa.to_nfa()),
-            Automata::Nfa(nfa) => Automata::Nfa(nfa),
-        }
-    }
-
-    fn table(&self) -> String {
-        match self {
-            Automata::Dfa(dfa) => dfa.to_table(),
-            Automata::Nfa(nfa) => nfa.to_table(),
-        }
-    }
 }
 
 // Code from readme to check validity
