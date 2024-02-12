@@ -73,6 +73,22 @@ pub fn binary_op(
         output!("{}", combined.to_table());
     }
 
+    if let Some(n) = args.generate {
+        println!("First {n} words of the {}:", op.as_str().to_lowercase());
+        let mut x = 0;
+        combined.clone().to_nfa().words().take(n).for_each(|word| {
+            if word.is_empty() {
+                println!("(empty word)");
+            } else {
+                println!("{word}");
+            }
+            x += 1;
+        });
+        if x != n {
+            println!("(only {x} words exists in the {})", op.as_str().to_lowercase());
+        }
+    }
+
     if let Some(path) = &args.compare_against {
         // We load the other DFA and then check equivalence to this DFA
         let compare_to = Automata::load_file(path, args.compared_type)

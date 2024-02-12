@@ -1,5 +1,6 @@
 use crate::dfa::{Dfa, DfaState};
 use crate::nfa::eval::NfaEvaluator;
+use crate::nfa::words::{WordComponentIndices, WordComponents, Words};
 use crate::table::Table;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -8,6 +9,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 pub mod eval;
 pub mod parse;
+pub mod words;
 
 /// A non-deterministic finite automata, denoted by its alphabet, states and the initial state
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,6 +59,178 @@ impl NfaState {
 }
 
 impl Nfa {
+    /// Removes all epsilon moves from this NFA, and after this call returns, no state will have any epsilon moves and
+    /// [has_epsilon_moves] will return false. Additionally, all "dead states", defined as states with only epsilon
+    /// moves and no other transitions, and which aren't the initial state, will also be removed. If the initial state
+    /// has epsilon moves to non-dead states, the NFA effectively has "multiple initial states" which isn't allowed
+    /// per definition of NFA. An additional state is then added, which is then promoted to start state, having
+    /// the same behaviour as the previous start state. The construction is built as such, that if there is a transition
+    /// from `a` to `b` on a symbol, it is remapped to be a transition from `a` to the epsilon closure of `b`. Due to
+    /// that, it is easy to visually compare the NFA with epsilon moves to the NFA without.
+    pub fn remove_epsilon_moves(&mut self) {
+        // Pre-calculate all epsilon closures
+        let closures = (0..self.states.len())
+            .filter_map(|idx| self.closure(idx))
+            .collect::<Vec<_>>();
+
+        // Find all 'dead states', i.e. states without normal transitions
+        // that we can remove later on. We also make sure not to include
+        // those when rewriting our transition table
+        let mut dead_states = self
+            .states
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, state)| state.transitions.iter().all(Vec::is_empty).then_some(idx))
+            .filter(|idx| *idx != self.initial_state && !self.states[*idx].is_accepting())
+            .collect::<HashSet<_>>();
+        // FIXME: We must:
+        //  * Keep in mind when moving to accepting dead state, that it is accepting
+        //  * If we have dead-end states that are accepting, we must not remove them
+        //  * If a state only has transitions to dead states (that are going to be removed),
+        //    then it should itself be considered dead
+        //  This function can be optimized more!
+        // dead_states = HashSet::new();
+
+        // first, remap transitions
+        self.states.iter_mut().for_each(|state| {
+            state.transitions.iter_mut().for_each(|transition_set| {
+                // On transition from a to b, transition from a to eps closure of b
+                *transition_set = transition_set
+                    .iter()
+                    .fold(HashSet::new(), |mut set, transition| {
+                        set.extend(&closures[*transition]);
+                        set
+                    })
+                    .drain()
+                    .filter(|i| !dead_states.contains(i))
+                    .collect();
+            });
+            state.epsilon_transitions.clear();
+        });
+
+        // secondly, figure out if we need a new initial state (which we would need if
+        // our initial state has epsilon transitions to other than dead states)
+        let init_closure = closures[self.initial_state]
+            .iter()
+            .copied()
+            .filter(|x| !dead_states.contains(x))
+            .collect::<HashSet<_>>();
+        if init_closure.len() > 1 {
+            let transitions = (0..self.alphabet.len())
+                .map(|elem_idx| {
+                    init_closure
+                        .iter()
+                        .fold(HashSet::new(), |mut set, &state| {
+                            set.extend(self.states[state].transitions[elem_idx].iter().copied());
+                            set
+                        })
+                        .drain()
+                        .filter(|i| !dead_states.contains(i))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+
+            let new_state = NfaState {
+                name: Rc::from("s_new"),
+                initial: true,
+                accepting: init_closure.iter().any(|idx| self.states[*idx].accepting),
+                epsilon_transitions: vec![],
+                transitions,
+            };
+
+            self.states[self.initial_state].initial = false;
+            self.initial_state = self.states.len();
+            self.states.push(new_state);
+        }
+
+        // thirdly, remove all dead states
+        self.remove_states(dead_states.drain().collect());
+    }
+
+    /// This function removes the states with indices in the vector from this NFA, changing the transition tables
+    /// of the remaining states to the new state indices. There should not be any transitions to any of the states
+    /// that are to be removed (except for in any of the states that are to be removed). If there is, transitions may be
+    /// undefined after this call. If debug_assertions is enabled, such errors would cause a panic here, otherwise they
+    /// would not immediately panic but other operations might panic at a later stage. The initial state cannot be
+    /// removed and will cause a panic if attempted to.
+    fn remove_states(&mut self, mut to_remove: Vec<usize>) {
+        let mut old_state_idx = (0..self.states.len()).collect::<Vec<_>>();
+
+        to_remove.sort();
+        if let Err(less_than) = to_remove.binary_search(&self.initial_state) {
+            // We removed "less than" states before the initial state: adjust
+            self.initial_state -= less_than;
+        } else {
+            panic!("Cannot remove initial state");
+        }
+
+        to_remove.iter().rev().for_each(|&idx| {
+            self.states.remove(idx);
+            old_state_idx.remove(idx);
+        });
+
+        let map = |idx| {
+            let res = old_state_idx.binary_search(&idx);
+            if cfg!(debug_assertions) {
+                Some(res.expect("No transitions to removed state"))
+            } else {
+                res.ok()
+            }
+        };
+        self.remap_transitions(map);
+    }
+
+    /// Remaps the transitions so that any transition to n gets mapped to mapper(n)
+    /// (if any, otherwise n is preserved)
+    fn remap_transitions(&mut self, mapper: impl Fn(usize) -> Option<usize>) {
+        self.states.iter_mut().for_each(|state| {
+            state.transitions.iter_mut().for_each(|table| {
+                table
+                    .iter_mut()
+                    .for_each(|trans| *trans = mapper(*trans).unwrap_or(*trans))
+            })
+        })
+    }
+
+    /// Iterate over the words accepted by this NFA in lexicographic order (according to
+    /// the order of the alphabet). The words are represented by a `Vec` of indices of the
+    /// elements, corresponding to the same element in the alphabet. For a `Vec` of `Rc<str>`s,
+    /// see [words_components], and for a `Vec` of element indices, see [word_component_indices].
+    /// Notably, this operation does not include a NFA-to-DFA conversion and doesn't suffer
+    /// from exponential blowups.
+    ///
+    /// *NOTE:* Current implementation only works for NFAs without epsilon moves.
+    /// See [remove_epsilon_moves]
+    pub fn words(&self) -> Words {
+        Words::new(self)
+    }
+
+    /// Iterate over the words accepted by this NFA in lexicographic order (according to
+    /// the order of the alphabet). The words are represented by a `Vec` of indices of the
+    /// elements, corresponding to the same element in the alphabet. For a String
+    /// representation, see [words], and for a `Vec` of element indices, see [word_component_indices].
+    /// Notably, this operation does not include a NFA-to-DFA conversion and doesn't suffer
+    /// from exponential blowups.
+    ///
+    /// *NOTE:* Current implementation only works for NFAs without epsilon moves.
+    /// See [remove_epsilon_moves]
+    pub fn word_components(&self) -> WordComponents {
+        WordComponents::new(self)
+    }
+
+    /// Iterate over the words accepted by this NFA in lexicographic order (according to
+    /// the order of the alphabet). The words are represented by a `Vec` of indices of the
+    /// elements, corresponding to the same element in the alphabet. For a String
+    /// representation, see [words], and for a `Vec` of `Rc<str>`, see [word_components].
+    /// Notably, this operation does not include a NFA-to-DFA conversion and doesn't suffer
+    /// from exponential blowups.
+    ///
+    /// *NOTE:* Current implementation only works for NFAs without epsilon moves.
+    /// See [remove_epsilon_moves]
+    pub fn word_component_indices(&self) -> WordComponentIndices {
+        WordComponentIndices::new(self)
+    }
+
     /// Converts this NFA to a DFA using the subset construction.
     /// Note that this is a somewhat expensive operation. The names of
     /// the states in the resulting DFA are non-deterministic, named

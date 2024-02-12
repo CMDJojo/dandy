@@ -8,6 +8,59 @@ use std::collections::HashSet;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
+struct MultipleCounterIter {
+    state: Vec<usize>,
+    len: usize,
+    max_number: usize,
+    has_returned: bool,
+    is_finished: bool,
+}
+
+impl MultipleCounterIter {
+    fn new(length: usize, max: usize) -> Self {
+        MultipleCounterIter {
+            state: vec![0; length],
+            len: 0,
+            max_number: max,
+            has_returned: false,
+            is_finished: false,
+        }
+    }
+}
+
+impl Iterator for MultipleCounterIter {
+    type Item = Vec<usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.is_finished {
+            return None;
+        }
+
+        if !self.has_returned {
+            self.has_returned = true;
+            return Some(vec![]);
+        }
+
+        for i in (0..self.len).rev() {
+            self.state[i] += 1;
+            if self.state[i] > self.max_number {
+                self.state[i] = 0;
+            } else {
+                return Some(self.state[0..self.len].to_vec());
+            }
+        }
+
+        self.len += 1;
+
+        if self.len > self.state.len() {
+            self.is_finished = true;
+            None
+        } else {
+            Some(self.state[0..self.len].to_vec())
+        }
+    }
+}
+
 #[test]
 fn test_subset_construction() {
     let dfa_source = include_str!("../tests/test_files/eq_to_nfa1.dfa");
@@ -119,6 +172,65 @@ proptest! {
             assert!(union.accepts_graphemes(test));
             assert!(!intersection.accepts_graphemes(test));
         });
+    }
+
+    #[test]
+    fn nfa_remove_epsilon_transitions(
+        nfa in nfa(25, 25)
+    ) {
+        let mut no_eps = nfa.clone();
+        no_eps.remove_epsilon_moves();
+        assert!(nfa.equivalent_to(&no_eps));
+        assert!(no_eps.states().iter().all(|s| s.epsilon_transitions.is_empty()));
+        assert!(!no_eps.has_epsilon_moves());
+    }
+
+    #[test]
+    fn nfa_words(
+        dfa in fixed_alphabet_dfa(25, 'a'..='f', ('a'..='f').count())
+    ) {
+        let nfa = dfa.to_nfa();
+        let mut no_eps = nfa.clone();
+        no_eps.remove_epsilon_moves();
+
+        let inverse = {
+            let mut dfa = nfa.to_dfa();
+            dfa.minimize();
+            dfa.invert();
+            let mut nfa = dfa.to_nfa();
+            nfa.remove_epsilon_moves();
+            nfa
+        };
+
+        no_eps.words().take(100).for_each(|word|{
+            assert!(nfa.accepts_graphemes(&word));
+            assert!(!inverse.accepts_graphemes(&word));
+        });
+
+        inverse.words().take(100).for_each(|word| {
+            assert!(!nfa.accepts_graphemes(&word));
+            assert!(inverse.accepts_graphemes(&word));
+        });
+
+        // This checks that merging both iter_nfa and iter_inv gives all words
+        // and in lexicographic order. It only checks for words up to length 3
+        // due to exponential growth. This also checks that the iterators doesn't
+        // "skip" words or generates duplicate words since all words should be in
+        // exactly one of the iterators.
+        let mut iter = MultipleCounterIter::new(3, nfa.alphabet().len() - 1);
+        let mut iter_nfa = nfa.word_component_indices();
+        let mut next_nfa = iter_nfa.next();
+        let mut iter_inv = inverse.word_component_indices();
+        let mut next_inv = iter_inv.next();
+        while let Some(word) = iter.next() {
+            if next_nfa.as_ref().map_or(false, |w| w == &word) {
+                next_nfa = iter_nfa.next();
+            } else if next_inv.as_ref().map_or(false, |w| w == &word) {
+                next_inv = iter_inv.next();
+            } else {
+                panic!("Missed component sequence {word:?}");
+            }
+        }
     }
 
     #[test]

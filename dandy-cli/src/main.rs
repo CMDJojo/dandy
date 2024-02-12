@@ -153,6 +153,8 @@ struct BinaryOpArgs {
     compared_type: AutomataType,
     #[arg(short, long, default_value_t)]
     minimized: bool,
+    #[arg(short, long)]
+    generate: Option<usize>,
     first: PathBuf,
     second: PathBuf,
     compare_against: Option<PathBuf>,
