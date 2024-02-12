@@ -74,18 +74,18 @@ pub fn binary_op(
     }
 
     if let Some(n) = args.generate {
-        println!("First {n} words of the {}:", op.as_str().to_lowercase());
+        output!("First {n} words of the {}:", op.as_str_lower());
         let mut x = 0;
         combined.clone().to_nfa().words().take(n).for_each(|word| {
             if word.is_empty() {
-                println!("(empty word)");
+                output!("(empty word)");
             } else {
-                println!("{word}");
+                output!("{word}");
             }
             x += 1;
         });
         if x != n {
-            println!("(only {x} words exists in the {})", op.as_str().to_lowercase());
+            output!("(only {x} words exists in the {})", op.as_str_lower());
         }
     }
 

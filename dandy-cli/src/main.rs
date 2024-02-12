@@ -12,22 +12,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-/// This command can be used to run operations on DFAs or NFAs.
-///
-/// `--type dfa/nfa` specifies if you are testing DFAs or NFAs. Defaults to DFA.
-/// `--condition all/any` specifies if all lines or just any lines of the files needs to be accepted by the DFA
-///     when testing it.
-/// The `equivalence` operation checks which of many automata are equivalent to the automata provided.
-/// The `test` operation checks which files has all/any lines accepted by the automata.
+/// A cli tool for parsing and checking DFAs, NFAs and Regexes.
 // Example usage: dandy-cli equivalence tests/dfa1.dfa tests/example_tree/**/*.dfa
 //                dandy-cli equivalence --in-type nfa --minimized tests/nfa1.nfa tests/example_tree/**/*.dfa
 #[derive(Parser, Debug)]
-#[command(
-    version,
-    author = "Jonathan Widén",
-    about = "A cli tool for importing and checking DFAs and NFAs",
-    long_about
-)]
+#[command(version, author = "Jonathan Widén", about)]
 struct DandyArgs {
     #[arg(
         short,
@@ -47,10 +36,25 @@ struct DandyArgs {
 
 #[derive(Debug, Subcommand)]
 enum Operation {
+    #[command(
+        about = "Checks the equivalence of two or more automatas or regexes (if they define the same language)"
+    )]
     Equivalence(EquivalenceArgs),
+    #[command(
+        about = "Computes the union of two automatas or regexes by conversion to DFA and product construction"
+    )]
     Union(BinaryOpArgs),
+    #[command(
+        about = "Computes the intersection of two automatas or regexes by conversion to DFA and product construction"
+    )]
     Intersection(BinaryOpArgs),
+    #[command(
+        about = "Computes the difference of two automatas or regexes by conversion to DFA and product construction"
+    )]
     Difference(BinaryOpArgs),
+    #[command(
+        about = "Computes the symmetric difference of two automatas or regexes by conversion to DFA and product construction"
+    )]
     SymmetricDifference(BinaryOpArgs),
 }
 
@@ -82,6 +86,15 @@ impl BinaryOperation {
             BinaryOperation::Intersection => "Intersection",
             BinaryOperation::Difference => "Difference",
             BinaryOperation::SymmetricDifference => "Symmetric difference",
+        }
+    }
+
+    fn as_str_lower(&self) -> &'static str {
+        match self {
+            BinaryOperation::Union => "union",
+            BinaryOperation::Intersection => "intersection",
+            BinaryOperation::Difference => "difference",
+            BinaryOperation::SymmetricDifference => "symmetric difference",
         }
     }
 }
@@ -125,7 +138,7 @@ struct EquivalenceArgs {
         short,
         long,
         default_value_t,
-        help = "(For 'DFA' test type only): Requires the DFAs to be minimized"
+        help = "(Only for testing 'DFA's): Requires the DFAs to be minimized"
     )]
     minimized: bool,
     #[arg(
@@ -137,26 +150,53 @@ struct EquivalenceArgs {
     r#bool: bool,
     #[arg(short, long, help = "How many path components to print (0 to disable)")]
     path_length: Option<usize>,
-    #[arg()]
+    #[arg(help = "The main automata to compare the other automatas to")]
     automata: PathBuf,
-    #[arg()]
+    #[arg(help = "Other files containing automata to compare to the main automata")]
     files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]
 struct BinaryOpArgs {
-    #[arg(short, long, value_enum, default_value_t = AutomataType::Dfa)]
+    #[arg(
+        short,
+        long,
+        value_enum,
+        default_value_t = AutomataType::Dfa,
+        help = "The type of the automatas to operate on"
+    )]
     r#type: AutomataType,
-    #[arg(short, long)]
+    #[arg(
+        short,
+        long,
+        help = "The type of the second automata to operate on (if different to the first automata)"
+    )]
     second_type: Option<AutomataType>,
-    #[arg(long, value_enum, default_value_t = AutomataType::Dfa)]
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = AutomataType::Dfa,
+        help = "The type of the automata you are using to compare the result to"
+    )]
     compared_type: AutomataType,
-    #[arg(short, long, default_value_t)]
+    #[arg(
+        short,
+        long,
+        default_value_t,
+        help = "Output the product construction as a minimized DFA"
+    )]
     minimized: bool,
-    #[arg(short, long)]
+    #[arg(
+        short,
+        long,
+        help = "Generates `n` strings of the resulting product construction"
+    )]
     generate: Option<usize>,
+    #[arg(help = "The first automata or regex to do the operation on")]
     first: PathBuf,
+    #[arg(help = "The second automata or regex to do the operation on")]
     second: PathBuf,
+    #[arg(help = "Optionally an automata or regex to compare the result of the operation to")]
     compare_against: Option<PathBuf>,
 }
 
