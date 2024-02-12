@@ -7,11 +7,16 @@ pub struct DfaEvaluator<'a> {
     dfa: &'a Dfa,
     rev_map: HashMap<&'a str, usize>,
     current_state: usize,
+    unknown_elem_seen: bool,
 }
 
 impl<'a> DfaEvaluator<'a> {
     pub fn is_accepting(&self) -> bool {
-        self.current_state().accepting
+        if self.unknown_elem_seen {
+            false
+        } else {
+            self.current_state().accepting
+        }
     }
 
     pub fn current_state(&self) -> &DfaState {
@@ -31,15 +36,28 @@ impl<'a> DfaEvaluator<'a> {
             })
             .collect()
     }
+
     pub fn step(&mut self, elem: &str) -> Option<&DfaState> {
-        let &idx = self.rev_map.get(elem)?;
-        self.current_state = self.dfa.states[self.current_state].transitions[idx];
-        Some(&self.dfa.states[self.current_state])
+        match self.rev_map.get(elem) {
+            None => {
+                self.unknown_elem_seen = true;
+                None
+            }
+            Some(&idx) => {
+                self.current_state = self.dfa.states[self.current_state].transitions[idx];
+                Some(&self.dfa.states[self.current_state])
+            }
+        }
     }
 
     pub fn step_multiple(&mut self, elems: &[&str]) -> Option<&DfaState> {
-        elems.iter().try_for_each(|e| self.step(e).map(|_| ()))?;
-        Some(&self.dfa.states[self.current_state])
+        match elems.iter().try_for_each(|e| self.step(e).map(|_| ())) {
+            None => {
+                self.unknown_elem_seen = true;
+                None
+            }
+            Some(_) => Some(&self.dfa.states[self.current_state]),
+        }
     }
 }
 
@@ -55,6 +73,7 @@ impl<'a> From<&'a Dfa> for DfaEvaluator<'a> {
             dfa: value,
             rev_map: map,
             current_state: value.initial_state,
+            unknown_elem_seen: false,
         }
     }
 }

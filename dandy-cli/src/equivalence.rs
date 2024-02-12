@@ -33,7 +33,7 @@ impl Display for EquivalenceResult {
     }
 }
 
-pub fn equivalence<'a>(
+pub fn equivalence(
     main_args: &DandyArgs,
     args: &EquivalenceArgs,
     mut output: impl FnMut(&str),

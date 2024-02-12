@@ -1,6 +1,8 @@
 mod automata;
 mod binary_op;
 mod equivalence;
+mod test_files;
+
 use automata::AutomataType;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use dandy::dfa::Dfa;
@@ -56,6 +58,40 @@ enum Operation {
         about = "Computes the symmetric difference of two automatas or regexes by conversion to DFA and product construction"
     )]
     SymmetricDifference(BinaryOpArgs),
+    #[command(about = "Tests a list of files against an automata or regex")]
+    TestFile(TestFileArgs),
+}
+
+#[derive(Debug, Args)]
+struct TestFileArgs {
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = AutomataType::Dfa,
+        help = "The type of the automata/regex to test"
+    )]
+    r#type: AutomataType,
+    #[arg(
+        short,
+        long,
+        value_enum,
+        default_value_t,
+        help = "The way to interpret the input file, \
+        either `lines` for treating each line is a separate test, or \
+        `files` to accept each file depending if all lines match"
+    )]
+    test_type: TestType,
+    #[arg(help = "The path to the automata or regex to test")]
+    automata: PathBuf,
+    #[arg(help = "The files to test")]
+    files: Vec<PathBuf>
+}
+
+#[derive(Default, Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
+enum TestType {
+    #[default]
+    Lines,
+    Files,
 }
 
 impl Operation {
@@ -206,13 +242,6 @@ enum OpType {
     Test,
 }
 
-#[derive(Default, Clone, Copy, Debug, ValueEnum)]
-enum TestType {
-    #[default]
-    All,
-    Any,
-}
-
 fn main() {
     let args = DandyArgs::parse();
 
@@ -247,6 +276,9 @@ fn main() {
             binary_op::binary_op(&args, bin_args, operation, &mut sink)
                 .map_err(|e| Error::Binary(operation, e))
         }
+        Operation::TestFile(test_args) => {
+            test_files::test_files(&args, test_args, &mut sink).map_err(Error::TestFile)
+        }
     };
 
     if let Err(e) = result {
@@ -260,6 +292,8 @@ enum Error {
     Equivalence(String),
     #[error("Error in {0}: {1}")]
     Binary(BinaryOperation, String),
+    #[error("Error in testing file: {0}")]
+    TestFile(String),
 }
 
 pub fn last_n_components(path: &Path, n: Option<usize>) -> Option<String> {
