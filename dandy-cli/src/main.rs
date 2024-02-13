@@ -1,5 +1,6 @@
 mod automata;
 mod binary_op;
+mod enumerate;
 mod equivalence;
 mod test_files;
 
@@ -58,8 +59,45 @@ enum Operation {
         about = "Computes the symmetric difference of two automatas or regexes by conversion to DFA and product construction"
     )]
     SymmetricDifference(BinaryOpArgs),
+    #[command(
+        about = "Enumerate strings in the language of a Regex provided as an argument (not from a file)"
+    )]
+    EnumerateRegex(EnumerateRegexArgs),
+    #[command(name = "enumerate", about = "Enumerate strings in the language of an Automata or Regex")]
+    EnumerateFile(EnumerateFileArgs),
     #[command(about = "Tests a list of files against an automata or regex")]
     TestFile(TestFileArgs),
+}
+
+#[derive(Debug, Args)]
+struct EnumerateRegexArgs {
+    #[arg(
+        short = 'n',
+        long,
+        default_value_t = 20,
+        help = "The amount of strings to generate"
+    )]
+    amount: usize,
+    regex: String,
+}
+
+#[derive(Debug, Args)]
+struct EnumerateFileArgs {
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = AutomataType::Dfa,
+        help = "The type of the automata/regex to enumerate strings from"
+    )]
+    r#type: AutomataType,
+    #[arg(
+        short,
+        long,
+        default_value_t = 30,
+        help = "The amount of strings to enumerate"
+    )]
+    amount: usize,
+    file: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -84,7 +122,7 @@ struct TestFileArgs {
     #[arg(help = "The path to the automata or regex to test")]
     automata: PathBuf,
     #[arg(help = "The files to test")]
-    files: Vec<PathBuf>
+    files: Vec<PathBuf>,
 }
 
 #[derive(Default, Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
@@ -225,9 +263,9 @@ struct BinaryOpArgs {
     #[arg(
         short,
         long,
-        help = "Generates `n` strings of the resulting product construction"
+        help = "Enumerates `n` strings of the resulting product construction"
     )]
-    generate: Option<usize>,
+    enumerate: Option<usize>,
     #[arg(help = "The first automata or regex to do the operation on")]
     first: PathBuf,
     #[arg(help = "The second automata or regex to do the operation on")]
@@ -279,6 +317,12 @@ fn main() {
         Operation::TestFile(test_args) => {
             test_files::test_files(&args, test_args, &mut sink).map_err(Error::TestFile)
         }
+        Operation::EnumerateRegex(regex_args) => {
+            enumerate::enumerate_regex(&args, regex_args, &mut sink).map_err(Error::EnumerateRegex)
+        }
+        Operation::EnumerateFile(file_args) => {
+            enumerate::enumerate_file(&args, file_args, &mut sink).map_err(Error::EnumerateFile)
+        }
     };
 
     if let Err(e) = result {
@@ -294,6 +338,10 @@ enum Error {
     Binary(BinaryOperation, String),
     #[error("Error in testing file: {0}")]
     TestFile(String),
+    #[error("Error in enumerating regex: {0}")]
+    EnumerateRegex(String),
+    #[error("Error in enumerating file: {0}")]
+    EnumerateFile(String),
 }
 
 pub fn last_n_components(path: &Path, n: Option<usize>) -> Option<String> {

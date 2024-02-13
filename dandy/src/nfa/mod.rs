@@ -68,6 +68,10 @@ impl Nfa {
     /// from `a` to `b` on a symbol, it is remapped to be a transition from `a` to the epsilon closure of `b`. Due to
     /// that, it is easy to visually compare the NFA with epsilon moves to the NFA without.
     pub fn remove_epsilon_moves(&mut self) {
+        if !self.has_epsilon_moves() {
+            return;
+        }
+
         // Pre-calculate all epsilon closures
         let closures = (0..self.states.len())
             .filter_map(|idx| self.closure(idx))

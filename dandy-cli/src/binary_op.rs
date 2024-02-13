@@ -25,11 +25,11 @@ pub fn binary_op(
 
     let (mut dfa1, converted1) = Automata::load_file(&args.first, args.r#type)
         .map_err(|e| Error::InputFile(1, e).to_string())?
-        .to_minimized_dfa_if_not_dfa();
+        .into_minimized_dfa_if_not_dfa();
     let (mut dfa2, converted2) =
         Automata::load_file(&args.second, args.second_type.unwrap_or(args.r#type))
             .map_err(|e| Error::InputFile(2, e).to_string())?
-            .to_minimized_dfa_if_not_dfa();
+            .into_minimized_dfa_if_not_dfa();
 
     if converted1 {
         log!("Input file 1 was converted to a minimized DFA to proceed, since it wasn't a DFA to start with");
@@ -73,8 +73,8 @@ pub fn binary_op(
         output!("{}", combined.to_table());
     }
 
-    if let Some(n) = args.generate {
-        output!("First {n} words of the {}:", op.as_str_lower());
+    if let Some(n) = args.enumerate {
+        output!("First {n} words in the language of the {}:", op.as_str_lower());
         let mut x = 0;
         combined.clone().to_nfa().words().take(n).for_each(|word| {
             if word.is_empty() {

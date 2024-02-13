@@ -22,7 +22,7 @@ pub fn test_files(
     }
 
     let automata = Automata::load_file(&args.automata, args.r#type)?;
-    let (nfa, _) = automata.to_nfa();
+    let (nfa, _) = automata.into_nfa();
     log!("Loaded NFA:\n{}", nfa.to_table());
 
     for file in &args.files {

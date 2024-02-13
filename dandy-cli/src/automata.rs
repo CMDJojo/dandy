@@ -96,8 +96,8 @@ impl Automata {
 
     /// Converts this Automata to a minimized DFA if the automata isn't already a DFA. If it is, nothing happens.
     /// Returns the DFA and a bool indicating whether a conversion occurred.
-    pub fn to_minimized_dfa_if_not_dfa(self) -> (Dfa, bool) {
-        let (mut dfa, converted) = self.to_dfa();
+    pub fn into_minimized_dfa_if_not_dfa(self) -> (Dfa, bool) {
+        let (mut dfa, converted) = self.into_dfa();
         if !converted {
             (dfa, false)
         } else {
@@ -108,8 +108,8 @@ impl Automata {
 
     /// Converts this Automata to a minimized DFA (independent of automata type). Returns the DFA and a bool indicating
     /// whether or not either a conversion or a minimization occurred.
-    pub fn to_minimized_dfa(self) -> (Dfa, bool) {
-        let (mut dfa, converted) = self.to_dfa();
+    pub fn into_minimized_dfa(self) -> (Dfa, bool) {
+        let (mut dfa, converted) = self.into_dfa();
         let prev_states = dfa.states().len();
         dfa.minimize();
         let new_states = dfa.states().len();
@@ -119,14 +119,14 @@ impl Automata {
     /// Converts this Automata to a minimized DFA (independent of automata type) wrapped in this Automata enum. Returns
     /// the Automata which is guaranteed to be a DFA and a bool indicating whether or not either a conversion or a
     /// minimization occurred.
-    pub fn to_minimized_dfa_automata(self) -> (Self, bool) {
-        let (dfa, converted) = self.to_minimized_dfa();
+    pub fn into_minimized_dfa_automata(self) -> (Self, bool) {
+        let (dfa, converted) = self.into_minimized_dfa();
         (Self::Dfa(dfa), converted)
     }
 
     /// Converts this Automata to a DFA (independent of automata type). Returns the DFA and a bool indicating
     /// whether or not a conversion occurred.
-    pub fn to_dfa(self) -> (Dfa, bool) {
+    pub fn into_dfa(self) -> (Dfa, bool) {
         match self {
             Automata::Dfa(dfa) => (dfa, false),
             Automata::Nfa(nfa) => (nfa.to_dfa(), true),
@@ -136,8 +136,8 @@ impl Automata {
 
     /// Converts this Automata to a DFA (independent of automata type) wrapped in this Automata enum. Returns the
     /// Automata which is guaranteed to be a DFA, and a bool indicating whether or not a conversion occurred.
-    pub fn to_dfa_automata(self) -> (Self, bool) {
-        let (dfa, converted) = self.to_dfa();
+    pub fn into_dfa_automata(self) -> (Self, bool) {
+        let (dfa, converted) = self.into_dfa();
         (Self::Dfa(dfa), converted)
     }
 
@@ -151,7 +151,7 @@ impl Automata {
 
     /// Converts this Automata to a NFA (independent of automata type). Returns the NFA and a bool indicating
     /// whether or not a conversion occurred.
-    pub fn to_nfa(self) -> (Nfa, bool) {
+    pub fn into_nfa(self) -> (Nfa, bool) {
         match self {
             Automata::Dfa(dfa) => (dfa.to_nfa(), true),
             Automata::Nfa(nfa) => (nfa, false),
@@ -161,8 +161,8 @@ impl Automata {
 
     /// Converts this Automata to a NFA (independent of automata type) wrapped in this Automata enum. Returns the
     /// Automata which is guaranteed to be a NFA, and a bool indicating whether or not a conversion occurred.
-    pub fn to_nfa_automata(self) -> (Self, bool) {
-        let (nfa, converted) = self.to_nfa();
+    pub fn into_to_nfa_automata(self) -> (Self, bool) {
+        let (nfa, converted) = self.into_nfa();
         (Self::Nfa(nfa), converted)
     }
 
@@ -179,8 +179,8 @@ impl Automata {
     /// occurred.
     pub fn convert_to(self, r#type: AutomataType) -> Option<(Self, bool)> {
         match r#type {
-            AutomataType::Dfa => Some(self.to_dfa_automata()),
-            AutomataType::Nfa => Some(self.to_nfa_automata()),
+            AutomataType::Dfa => Some(self.into_dfa_automata()),
+            AutomataType::Nfa => Some(self.into_to_nfa_automata()),
             AutomataType::Regex => {
                 if let Self::Regex(regex) = self {
                     Some((Self::Regex(regex), false))
@@ -197,8 +197,8 @@ impl Automata {
     /// Regex, the most appropriate type is a NFA. This speeds up equivalence checking later on.
     pub fn prepare_to_compare_with(self, other: AutomataType) -> (Self, bool) {
         match other {
-            AutomataType::Dfa => self.to_dfa_automata(),
-            AutomataType::Nfa | AutomataType::Regex => self.to_nfa_automata(),
+            AutomataType::Dfa => self.into_dfa_automata(),
+            AutomataType::Nfa | AutomataType::Regex => self.into_to_nfa_automata(),
         }
     }
 
@@ -241,7 +241,7 @@ impl Automata {
             (T::Dfa, _) => {
                 warn_minimized!(minimized);
                 let dfa1 = self.borrow_dfa().unwrap();
-                let (dfa2, _) = other.to_dfa();
+                let (dfa2, _) = other.into_dfa();
                 if dfa1.equivalent_to(&dfa2) {
                     Equivalent
                 } else {
@@ -251,7 +251,7 @@ impl Automata {
             (T::Nfa, _) => {
                 warn_minimized_check_type!(minimized, other);
                 let nfa1 = self.borrow_nfa().unwrap();
-                let (nfa2, _) = other.to_nfa();
+                let (nfa2, _) = other.into_nfa();
                 if nfa1.equivalent_to(&nfa2) {
                     Equivalent
                 } else {
@@ -262,8 +262,8 @@ impl Automata {
                 eprintln!("Testing with Regex as base, this gives poor performance");
                 eprintln!("This is most likely an internal error; please send a bug report");
                 warn_minimized!(minimized);
-                let (dfa1, _) = self.clone().to_dfa();
-                let (dfa2, _) = other.to_dfa();
+                let (dfa1, _) = self.clone().into_dfa();
+                let (dfa2, _) = other.into_dfa();
                 if dfa1.equivalent_to(&dfa2) {
                     Equivalent
                 } else {

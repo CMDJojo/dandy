@@ -132,7 +132,7 @@ impl DandyTester {
 
         let minimized = if args.minimized {
             if args.r#type == AutomataType::Dfa {
-                (input, _) = input.to_minimized_dfa_automata();
+                (input, _) = input.into_minimized_dfa_automata();
                 true
             } else {
                 return Err(Error::InvalidMinimizedConfig);

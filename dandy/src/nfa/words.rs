@@ -280,10 +280,9 @@ impl<'a> WordComponentIndices<'a> {
     fn generate_adjacency_matrix(nfa: &'a Nfa) -> DMatrix<NumBool> {
         let n = nfa.states.len();
         let eps = nfa.has_epsilon_moves();
-        let matrix = DMatrix::from_fn(n, n, |from, to| {
+        DMatrix::from_fn(n, n, |from, to| {
             Self::is_reachable_in_one_step(nfa, from, to, eps).into()
-        });
-        matrix
+        })
     }
 
     fn identity_matrix(n: usize) -> DMatrix<NumBool> {
