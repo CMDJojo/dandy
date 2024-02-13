@@ -6,7 +6,7 @@ use dandy::parser;
 pub fn enumerate_regex(
     main_args: &DandyArgs,
     args: &EnumerateRegexArgs,
-    output: &mut impl FnMut(&str),
+    output: impl FnMut(&str),
 ) -> Result<(), String> {
     let regex = parser::regex(&args.regex).map_err(|e| e.to_string())?;
     let nfa = regex.to_nfa();
@@ -17,7 +17,7 @@ pub fn enumerate_regex(
 pub fn enumerate_file(
     main_args: &DandyArgs,
     args: &EnumerateFileArgs,
-    output: &mut impl FnMut(&str),
+    output: impl FnMut(&str),
 ) -> Result<(), String> {
     let file = Automata::load_file(&args.file, args.r#type)?;
     let (nfa, _) = file.into_nfa();
@@ -25,7 +25,12 @@ pub fn enumerate_file(
     Ok(())
 }
 
-fn enumerate_nfa(mut nfa: Nfa, main_args: &DandyArgs, n: usize, output: &mut impl FnMut(&str)) {
+fn enumerate_nfa(
+    mut nfa: Nfa,
+    main_args: &DandyArgs,
+    n: usize,
+    #[allow(unused_variables, unused_mut)] mut output: impl FnMut(&str),
+) {
     #[allow(unused_variables)]
     let log = |s: &str| {
         if !main_args.no_log {

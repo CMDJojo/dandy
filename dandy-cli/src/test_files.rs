@@ -5,7 +5,7 @@ use std::fs;
 pub fn test_files(
     main_args: &DandyArgs,
     args: &TestFileArgs,
-    mut output: impl FnMut(&str),
+    #[allow(unused_variables, unused_mut)] mut output: impl FnMut(&str),
 ) -> Result<(), String> {
     #[allow(unused_variables)]
     let log = |s: &str| {

@@ -7,7 +7,7 @@ pub fn binary_op(
     main_args: &DandyArgs,
     args: &BinaryOpArgs,
     op: BinaryOperation,
-    output: &mut impl FnMut(&str),
+    #[allow(unused_variables, unused_mut)] mut output: impl FnMut(&str),
 ) -> Result<(), String> {
     #[allow(unused_variables)]
     let log = |s: &str| {
@@ -74,7 +74,10 @@ pub fn binary_op(
     }
 
     if let Some(n) = args.enumerate {
-        output!("First {n} words in the language of the {}:", op.as_str_lower());
+        output!(
+            "First {n} words in the language of the {}:",
+            op.as_str_lower()
+        );
         let mut x = 0;
         combined.clone().to_nfa().words().take(n).for_each(|word| {
             if word.is_empty() {

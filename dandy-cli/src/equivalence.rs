@@ -1,3 +1,4 @@
+use crate::automata::AutomataType;
 use crate::{automata::Automata, DandyArgs, EquivalenceArgs};
 use dandy::dfa::parse::DfaParseError;
 use dandy::nfa::parse::NfaParseError;
@@ -7,7 +8,6 @@ use std::path::Path;
 use std::time::SystemTime;
 use std::{fs, io};
 use thiserror::Error;
-use crate::automata::AutomataType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EquivalenceResult {
@@ -36,7 +36,7 @@ impl Display for EquivalenceResult {
 pub fn equivalence(
     main_args: &DandyArgs,
     args: &EquivalenceArgs,
-    mut output: impl FnMut(&str),
+    #[allow(unused_variables, unused_mut)] mut output: impl FnMut(&str),
 ) -> Result<(), String> {
     let file = fs::read_to_string(&args.automata).map_err(|e| Error::InputFile(e).to_string())?;
 
