@@ -6,19 +6,19 @@ use eframe::egui;
 use egui::{FontSelection, TextStyle};
 
 fn example_dfa() -> Dfa {
-    dandy::parser::dfa(include_str!("../../dandy-cli/src/example.dfa"))
+    dandy::parser::dfa(include_str!("../../dandy-cli/tests/example.dfa"))
         .unwrap()
         .try_into()
         .unwrap()
 }
 
 fn test_ascii_draw() {
-    let str = include_str!("../../dandy-cli/src/example2.dfa");
+    let str = include_str!("../../dandy-cli/tests/example2.dfa");
     let dfa: Dfa = dandy::parser::dfa(str).unwrap().try_into().unwrap();
     let ascii_art = dandy_draw::dfa_ascii_art(&dfa);
     println!("{ascii_art}");
 
-    let str = include_str!("../../dandy-cli/src/example2.nfa");
+    let str = include_str!("../../dandy-cli/tests/example2.nfa");
     let nfa: Nfa = dandy::parser::nfa(str).unwrap().try_into().unwrap();
     let ascii_art = dandy_draw::nfa_ascii_art(&nfa);
     println!("{ascii_art}");
