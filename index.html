@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Dandy</title>
+    <meta charset="UTF-8">
+    <style>
+        textarea {
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+Check equivalence of DFA here!
+<br>
+<label>
+    DFA 1:
+    <br>
+    <textarea id="dfa-eq-dfa1" rows="10" cols="30">
+       a  b  c
+→ * s₀ s₁ s₀ s₂
+    s₁ s₂ s₁ s₁
+  * s₂ s₂ s₂ s₂
+    </textarea>
+</label>
+<br>
+<label>
+    DFA 2:
+    <br>
+    <textarea id="dfa-eq-dfa2" rows="10" cols="30">
+    a b c
+→ * x z x y
+  * y y y y
+    z y a a
+    a y z a
+    </textarea>
+</label>
+<br>
+<button id="dfa-eq-check">Check!</button>
+<br>
+<span id="dfa-eq-errors"></span>
+
+<br>
+<br>
+
+Check equivalence of NFA here!
+<br>
+<label>
+    NFA 1:
+    <br>
+    <textarea id="nfa-eq-nfa1" rows="10" cols="30">
+     a    b    c
+→ s₀ {s₀} {s₁} {s₀ s₂}
+  s₁ {}   {s₃} {s₂}
+  s₂ {}   {s₁} {s₄}
+  s₃ {s₄} {}   {s₃}
+* s₄ {}   {s₄} {}
+     </textarea>
+</label>
+<br>
+<label>
+    NFA 2:
+    <br>
+    <textarea id="nfa-eq-nfa2" rows="10" cols="30">
+     ε    a       b
+→ s₀ {}   {s₁}    {s₀ s₂}
+  s₁ {s₂} {s₄}    {s₃}
+  s₂ {}   {s₁ s₄} {s₃}
+  s₃ {s₅} {s₄ s₅} {}
+  s₄ {s₃} {}      {s₅}
+* s₅ {}   {s₅}    {s₅}
+    </textarea>
+</label>
+<br>
+<button id="nfa-eq-check">Check!</button>
+<br>
+<span id="nfa-eq-errors"></span>
+
+<br>
+<br>
+
+Convert NFA to DFA here!
+<br>
+
+<label>
+    NFA:
+    <br>
+    <textarea id="nfa-to-dfa" rows="10" cols="30">
+     ε    a       b
+→ s₀ {}   {s₁}    {s₀ s₂}
+  s₁ {s₂} {s₄}    {s₃}
+  s₂ {}   {s₁ s₄} {s₃}
+  s₃ {s₅} {s₄ s₅} {}
+  s₄ {s₃} {}      {s₅}
+* s₅ {}   {s₅}    {s₅}
+    </textarea>
+</label>
+<br>
+<button id="nfa-to-dfa-btn">Convert!</button>
+<br>
+<label>
+    Result:
+    <br>
+    <textarea id="nfa-to-dfa-out" rows="10" cols="30" readonly>
+Convert an NFA and
+the DFA will appear here
+    </textarea>
+</label>
+
+<br>
+<br>
+
+Minimize DFA here!
+<br>
+
+<label>
+    DFA:
+    <br>
+    <textarea id="dfa-minimize" rows="10" cols="30">
+      a b c
+→ * x z x y
+  * y y y y
+    z y a a
+    a y z a
+    </textarea>
+</label>
+<br>
+<button id="dfa-minimize-btn">Minimize!</button>
+<br>
+<label>
+    Result:
+    <br>
+    <textarea id="dfa-minimize-out" rows="10" cols="30" readonly>
+Minimize a DFA and the
+result will appear here
+    </textarea>
+</label>
+
+<br>
+<br>
+
+Convert Regex to NFA here!
+<br>
+
+<label>
+    NFA:
+    <br>
+    <textarea id="regex-to-nfa" rows="1" cols="30">
+(ab)+c
+    </textarea>
+</label>
+<br>
+<button id="regex-to-nfa-btn">Convert!</button>
+<br>
+<label>
+    Result:
+    <br>
+    <textarea id="regex-to-nfa-out" rows="15" cols="30" readonly>
+Convert a Regex and the
+result will appear here
+    </textarea>
+</label>
+<br>
+<br>
+
+Visualize NFA here!
+<br>
+
+<label>
+    NFA:
+    <br>
+    <textarea id="nfa-visualize" rows="10" cols="30">
+     ε    a       b
+→ s₀ {}   {s₁}    {s₀ s₂}
+  s₁ {s₂} {s₄}    {s₃}
+  s₂ {}   {s₁ s₄} {s₃}
+  s₃ {s₅} {s₄ s₅} {}
+  s₄ {s₃} {}      {s₅}
+* s₅ {}   {s₅}    {s₅}
+    </textarea>
+</label>
+<br>
+<button id="nfa-visualize-btn">Visualize!</button>
+<br>
+<label>
+    <canvas id="nfa-visualization" width=700, height=500, style="background: black"></canvas>
+</label>
+
+<script type="module">
+    import init, {
+        load_dfa,
+        check_dfa_eq,
+        delete_dfa,
+        dfa_to_nfa,
+        dfa_to_table,
+        draw_dfa,
+        minimize_dfa,
+        load_nfa,
+        check_nfa_eq,
+        delete_nfa,
+        nfa_to_dfa,
+        nfa_to_table,
+        draw_nfa,
+        load_regex,
+        delete_regex,
+        regex_to_nfa
+    } from './web_bindings/dandy_wasm.js';
+
+    async function run() {
+        await init();
+        document.getElementById("dfa-eq-check").onclick = checkDfaEq;
+        document.getElementById("nfa-eq-check").onclick = checkNfaEq;
+        document.getElementById("nfa-to-dfa-btn").onclick = nfaToDfa;
+        document.getElementById("nfa-visualize-btn").onclick = visualizeNfa;
+        document.getElementById("dfa-minimize-btn").onclick = minimizeDfa;
+        document.getElementById("regex-to-nfa-btn").onclick = regexToNfa;
+    }
+
+    function checkDfaEq() {
+        let errors = "";
+        let dfa1 = 0, dfa2 = 0;
+
+        try {
+            dfa1 = load_dfa(document.getElementById("dfa-eq-dfa1").value);
+        } catch (e) {
+            errors += "Error parsing DFA 1: " + e + "\n";
+        }
+
+        try {
+            dfa2 = load_dfa(document.getElementById("dfa-eq-dfa2").value);
+        } catch (e) {
+            errors += "Error parsing DFA 2: " + e + "\n";
+        }
+
+        if (errors === "") {
+            let equal = check_dfa_eq(dfa1, dfa2);
+            document.getElementById("dfa-eq-check").innerText = equal ? "Equivalent" : "Not equivalent";
+            delete_dfa(dfa1);
+            delete_dfa(dfa2);
+        } else {
+            document.getElementById("dfa-eq-check").innerText = "Fix errors first!";
+        }
+
+        document.getElementById("dfa-eq-errors").innerText = errors;
+    }
+
+    function checkNfaEq() {
+        let errors = "";
+        let nfa1 = 0, nfa2 = 0;
+
+        try {
+            nfa1 = load_nfa(document.getElementById("nfa-eq-nfa1").value);
+        } catch (e) {
+            errors += "Error parsing NFA 1: " + e + "\n";
+        }
+
+        try {
+            nfa2 = load_nfa(document.getElementById("nfa-eq-nfa2").value);
+        } catch (e) {
+            errors += "Error parsing NFA 2: " + e + "\n";
+        }
+
+        if (errors === "") {
+            let equal = check_nfa_eq(nfa1, nfa2);
+            document.getElementById("nfa-eq-check").innerText = equal ? "Equivalent" : "Not equivalent";
+            delete_nfa(nfa1);
+            delete_nfa(nfa2);
+        } else {
+            document.getElementById("nfa-eq-check").innerText = "Fix errors first!";
+        }
+
+        document.getElementById("nfa-eq-errors").innerText = errors;
+    }
+
+    function nfaToDfa() {
+        let nfa = 0;
+        try {
+            nfa = load_nfa(document.getElementById("nfa-to-dfa").value);
+        } catch (e) {
+            document.getElementById("nfa-to-dfa-out").value = e;
+            return;
+        }
+        let dfa = nfa_to_dfa(nfa);
+        document.getElementById("nfa-to-dfa-out").value = dfa_to_table(dfa).replace("\n", "\r\n");
+        delete_nfa(nfa);
+        delete_dfa(dfa);
+    }
+
+    function visualizeNfa() {
+        let nfa = 0;
+        try {
+            nfa = load_nfa(document.getElementById("nfa-visualize").value);
+            document.getElementById("nfa-visualize-btn").innerText = "Visualize!";
+        } catch (e) {
+            document.getElementById("nfa-visualize-btn").innerText = e;
+            return;
+        }
+        draw_nfa(nfa, "nfa-visualization");
+    }
+
+    function minimizeDfa() {
+        let dfa = 0;
+        try {
+            dfa = load_dfa(document.getElementById("dfa-minimize").value);
+            document.getElementById("dfa-minimize-btn").innerText = "Minimize!";
+            minimize_dfa(dfa);
+            document.getElementById("dfa-minimize-out").value = dfa_to_table(dfa).replace("\n", "\r\n");
+        } catch (e) {
+            document.getElementById("dfa-minimize-btn").innerText = e;
+        }
+    }
+
+    function regexToNfa() {
+        try {
+            let regex = load_regex(document.getElementById("regex-to-nfa").value);
+            document.getElementById("regex-to-nfa-btn").innerText = "Convert!";
+            let nfa = regex_to_nfa(regex);
+            document.getElementById("regex-to-nfa-out").value = nfa_to_table(nfa).replace("\n", "\r\n");
+        } catch (e) {
+            document.getElementById("regex-to-nfa-btn").innerText = e;
+        }
+    }
+
+    run();
+</script>
+</body>
+</html>

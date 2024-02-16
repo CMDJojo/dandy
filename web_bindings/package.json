@@ -1,0 +1,14 @@
+{
+  "name": "dandy-wasm",
+  "version": "0.1.0",
+  "files": [
+    "dandy_wasm_bg.wasm",
+    "dandy_wasm.js",
+    "dandy_wasm.d.ts"
+  ],
+  "module": "dandy_wasm.js",
+  "types": "dandy_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
