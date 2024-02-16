@@ -1,38 +1,38 @@
-//!# dandy
+//! # dandy
 //!
-//! `dandy` is a Rust library for DFA, NFA and ε-NFA automata, strongly based on a text-based file format for automata.
+//! `dandy` is a Rust library for DFAs, NFAs, ε-NFAs and Regular Expressions, and an implementation of a file format
+//! for such. See the documentation for [DFAs](dfa), [NFAs](nfa) and [Regular Expressions](regex) for more detailed
+//! information about each data type and their operations
 //!
 //! ## Usage
 //!
 //! ```rust
 //! use dandy::dfa::Dfa;
 //!
-//! fn main() {
-//!     let raw_dfa = "
-//!            a  b  c
-//!     → * s₀ s₁ s₀ s₂
-//!         s₁ s₂ s₁ s₁
-//!       * s₂ s₂ s₂ s₂
-//!     ";
-//!     // First pass parses without checking validity of the DFA
-//!     let parsed_dfa = dandy::parser::dfa(raw_dfa).unwrap();
-//!     // Second step checks the existence of all mentioned states and
-//!     // the existence of an initial state
-//!     let dfa: Dfa = parsed_dfa.try_into().unwrap();
-//!     assert!(dfa.accepts(&["a", "b", "c", "c", "a"]));
-//!     assert!(dfa.accepts(&["c", "b", "a"]));
-//!     assert!(!dfa.accepts(&["a", "b", "b", "c"]));
+//! let raw_dfa = "
+//!        a  b  c
+//! → * s₀ s₁ s₀ s₂
+//!     s₁ s₂ s₁ s₁
+//!   * s₂ s₂ s₂ s₂
+//! ";
+//! // First pass parses without checking validity of the DFA
+//! let parsed_dfa = dandy::parser::dfa(raw_dfa).unwrap();
+//! // Second step checks the existence of all mentioned states and
+//! // the existence of an initial state
+//! let dfa: Dfa = parsed_dfa.try_into().unwrap();
+//! assert!(dfa.accepts(&["a", "b", "c", "c", "a"]));
+//! assert!(dfa.accepts(&["c", "b", "a"]));
+//! assert!(!dfa.accepts(&["a", "b", "b", "c"]));
 //!
-//!     let equivalent_dfa = "
-//!         a b c
-//!     → * x z x y
-//!       * y y y y
-//!         z y w z
-//!         w y z w
-//!     ";
-//!     let dfa2 = dandy::parser::dfa(equivalent_dfa).unwrap().try_into().unwrap();
-//!     assert!(dfa.equivalent_to(&dfa2));
-//! }
+//! let equivalent_dfa = "
+//!     a b c
+//! → * x z x y
+//!   * y y y y
+//!     z y w z
+//!     w y z w
+//! ";
+//! let dfa2 = dandy::parser::dfa(equivalent_dfa).unwrap().try_into().unwrap();
+//! assert!(dfa.equivalent_to(&dfa2));
 //! ```
 //!
 //! ## File format
@@ -88,15 +88,9 @@
 //! must be written as the empty set `{}`. The same rules for comments and leading and trailing whitespace as for
 //! the DFAs apply. `ε` may be written as "eps", and may be absent for denoting a non-ε-NFA.
 //!
-//! ## Work-in-progress notes
-//!
-//! This crate is very much work-in-progress. The alphabet consists of `String`s. This may be changed to characters or
-//! to a generic type, to facilitate a lower memory footprint and more ergonomic acceptance checking. There are also
-//! very few operations implemented at the moment.
-//!
 //! ## Operations
 //!
-//! This library currently supports:
+//! This library currently supports, among other things:
 //!
 //! * [Parsing](parser::dfa) and [validating](dfa::parse) DFAs
 //! * [Parsing](parser::nfa) and [validating](nfa::parse) NFAs (with and without epsilon moves)
@@ -108,8 +102,17 @@
 //! * [Identifying and removing unreachable states from a DFA](dfa::Dfa::unreachable_states)
 //! * [Identifying and merging non-distinguishable states from a DFA](dfa::Dfa::state_equivalence_classes)
 //! * [Minimizing a DFA](dfa::Dfa::minimize) (by executing the two above-mentioned steps)
+//! * [Product construction](dfa::Dfa::product_construction) for DFAs, among [union](dfa::Dfa::union),
+//!   [intersection](dfa::Dfa::intersection), [difference](dfa::Dfa::difference) and
+//!   [symmetric difference](dfa::Dfa::symmetric_difference) operations
+//! * [Product construction](nfa::Nfa::product_construction) for NFAs
+//! * [Enumerating all words](nfa::Nfa::words) accepted by a NFA
+//! * [Removing epsilon moves](nfa::Nfa::remove_epsilon_moves) from a NFA
 //! * [Parsing regular expressions](parser::regex)
 //! * [Converting regular expressions to NFAs](regex::Regex::to_nfa)
+//!
+//! See the documentation for [DFAs](dfa), [NFAs](nfa) and [Regular Expressions](regex) for more detailed
+//! information about each data type and their operations, together with some code examples
 
 pub mod dfa;
 pub mod nfa;
@@ -118,3 +121,4 @@ pub mod regex;
 mod table;
 #[cfg(test)]
 mod tests;
+mod util;

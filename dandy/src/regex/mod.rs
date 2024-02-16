@@ -1,3 +1,56 @@
+//! # Regular expressions
+//! Dandy implements some mathematical definitions of Regular Expressions, which is a subset of the regexes commonly
+//! found for pattern matching in programming languages.
+//!
+//! ## Syntax
+//! Regular expressions are written in a UTF-8 encoded file. Each unicode extended grapheme clusters is considered
+//! one character (but no normalization is used). Sequencing is done by concatenating characters. There are
+//! eight reserved characters: `(`, `)`, `∅`, `ε`, `|`, `*`, `+` and `\`. These needs to be escaped with a backslash
+//! (`\`), while all other characters are supported. Parenthesis `(`,`)` is used for grouping, `∅` denotes the empty
+//! language, `ε` denotes the empty string, `|` denotes alternation, and `*`/`+` is Kleene star/plus (zero or more/one
+//! or more). Initial and trailing whitespace is ignored, but all whitespace within the expression is significant.
+//!
+//! Here are some examples:
+//! * `(ab)+` matches `ab`, `abab`, `ababab`, ...
+//! * `(ab)*` matches `(empty string)`, `ab`, `abab`, `ababab`, ...
+//! * `0*1(0+ε)` matches `1`, `10`, `0001` and all other strings containing the character `1` once
+//!
+//! ## Operations
+//! The only operation currently implemented is converting a Regular Expression to a NFA. From there, you can do lots
+//! of stuff, like optimizing it, encoding it to a table, enumerate all words in it, convert it to a DFA to take the
+//! symmetric difference to another regex or automata etc.
+//!
+//! Here are some example usages of the regexes above:
+//! ```
+//! use dandy::parser;
+//! let regex1 = parser::regex("(ab)+").unwrap();
+//! let regex2 = parser::regex("(ab)*").unwrap();
+//! let regex3 = parser::regex("0*1(0|ε)").unwrap();
+//!
+//! let nfa1 = regex1.to_nfa();
+//! let nfa2 = regex2.to_nfa();
+//! let mut nfa3 = regex3.to_nfa();
+//!
+//! assert!(&["ab", "abab", "ababab"].iter().all(|s| nfa1.accepts_graphemes(s)));
+//! assert!(&["", "ab", "abab", "ababab"].iter().all(|s| nfa2.accepts_graphemes(s)));
+//! assert!(&["1", "10", "0001"].iter().all(|s| nfa3.accepts_graphemes(s)));
+//!
+//! let dfa1 = nfa1.to_dfa();
+//! let dfa2 = nfa2.to_dfa();
+//! let mut symmetric_difference = dfa1.symmetric_difference(&dfa2).unwrap().to_nfa();
+//! // The only word not in both regex1 and regex2 is the empty word
+//! let mut words = symmetric_difference.words();
+//! assert_eq!(words.next(), Some("".to_string()));
+//! assert_eq!(words.next(), None);
+//!
+//! nfa3.remove_epsilon_moves(); // Note: word enumeration is currently only available for NFAs without epsilon moves
+//! let mut words = nfa3.words();
+//! // Words are always enumerated lexicographically
+//! assert_eq!(words.next(), Some("1".to_string()));
+//! assert_eq!(words.next(), Some("01".to_string()));
+//! assert_eq!(words.next(), Some("10".to_string()));
+//! ```
+
 use crate::nfa::{Nfa, NfaState};
 use std::collections::HashMap;
 use std::iter;
@@ -101,6 +154,7 @@ impl Regex {
         }
     }
 
+    /// *This is subject to change*
     pub fn to_string(&self) -> String {
         let mut acc = String::new();
         Self::build_string(&self.tree, &mut acc);

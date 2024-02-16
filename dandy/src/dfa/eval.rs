@@ -12,18 +12,19 @@ pub struct DfaEvaluator<'a> {
 
 impl<'a> DfaEvaluator<'a> {
     pub fn is_accepting(&self) -> bool {
+        self.current_state().map_or(false, DfaState::is_accepting)
+    }
+
+    pub fn current_state(&self) -> Option<&DfaState> {
         if self.unknown_elem_seen {
-            false
+            None
         } else {
-            self.current_state().accepting
+            Some(&self.dfa.states[self.current_state])
         }
     }
 
-    pub fn current_state(&self) -> &DfaState {
-        &self.dfa.states[self.current_state]
-    }
-
     pub fn current_state_idx(&self) -> usize {
+        // FIXME: Option<usize>
         self.current_state
     }
 
@@ -38,6 +39,10 @@ impl<'a> DfaEvaluator<'a> {
     }
 
     pub fn step(&mut self, elem: &str) -> Option<&DfaState> {
+        if self.unknown_elem_seen {
+            return None;
+        }
+
         match self.rev_map.get(elem) {
             None => {
                 self.unknown_elem_seen = true;

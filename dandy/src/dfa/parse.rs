@@ -1,6 +1,7 @@
 use crate::dfa::{Dfa, DfaState};
 use crate::parser::{ParsedDfa, ParsedDfaState};
 use std::collections::{HashMap, HashSet};
+use std::ops::Not;
 use std::rc::Rc;
 use thiserror::Error;
 
@@ -16,6 +17,8 @@ pub enum DfaParseError<'a> {
     MultipleInitialStates,
     #[error("'{0}' appears twice in the alphabet")]
     DuplicateAlphabetSymbol(&'a str),
+    #[error("State '{0}' defined multiple times")]
+    DuplicateStateDefinition(&'a str),
 }
 
 impl<'a> TryFrom<ParsedDfa<'a>> for Dfa {
@@ -37,6 +40,17 @@ impl<'a> TryFrom<ParsedDfa<'a>> for Dfa {
             .enumerate()
             .map(|(i, s)| (s.name, i))
             .collect();
+
+        if state_name_map.len() != states.len() {
+            // We have a duplicate name, let's find it!
+            let mut seen = HashSet::new();
+            let duplicate = states
+                .iter()
+                .find_map(|s| seen.insert(s.name).not().then_some(s.name))
+                .unwrap_or("<unknown>");
+            return Err(DuplicateStateDefinition(duplicate));
+        }
+
         let mut initial_state = None;
 
         let mut new_states = Vec::with_capacity(states.len());

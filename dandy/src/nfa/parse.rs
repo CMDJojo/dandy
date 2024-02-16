@@ -1,10 +1,11 @@
 use crate::nfa::{Nfa, NfaState};
 use crate::parser::{NfaAlphabetEntry, ParsedNfa, ParsedNfaState};
 use std::collections::{HashMap, HashSet};
+use std::ops::Not;
 use std::rc::Rc;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum NfaParseError<'a> {
     #[error("Wrong number of transitions for state '{0}': has {1} expected {2}")]
     WrongNumberOfTransitions(&'a str, usize, usize),
@@ -16,6 +17,8 @@ pub enum NfaParseError<'a> {
     MultipleInitialStates,
     #[error("'{0}' appears twice in the alphabet")]
     DuplicateAlphabetSymbol(&'a str),
+    #[error("State '{0}' defined multiple times")]
+    DuplicateStateDefinition(&'a str),
 }
 
 impl<'a> TryFrom<ParsedNfa<'a>> for Nfa {
@@ -49,6 +52,17 @@ impl<'a> TryFrom<ParsedNfa<'a>> for Nfa {
             .enumerate()
             .map(|(i, s)| (s.name, i))
             .collect();
+
+        if state_name_map.len() != states.len() {
+            // We have a duplicate name, let's find it!
+            let mut seen = HashSet::new();
+            let duplicate = states
+                .iter()
+                .find_map(|s| seen.insert(s.name).not().then_some(s.name))
+                .unwrap_or("<unknown>");
+            return Err(DuplicateStateDefinition(duplicate));
+        }
+
         let mut initial_state = None;
 
         let mut new_states = Vec::with_capacity(states.len());

@@ -1,4 +1,5 @@
 use std::cmp::max;
+use std::iter;
 
 #[derive(Default, Debug, Clone)]
 pub struct Table<'a> {
@@ -32,7 +33,14 @@ impl<'a> Table<'a> {
             .iter()
             .map(|row| {
                 row.iter()
-                    .zip(&self.row_len)
+                    .zip(
+                        // We zip with the row lengths but we intentionally set the last length to 0
+                        // as to not pad the last column
+                        self.row_len
+                            .iter()
+                            .take(self.row_len.len() - 1)
+                            .chain(iter::once(&0)),
+                    )
                     .map(|(s, l)| format!("{}{sep}", pad(s, *l)))
                     .collect::<Vec<_>>()
                     .join("")

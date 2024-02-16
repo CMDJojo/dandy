@@ -64,36 +64,36 @@ use nom::{combinator::all_consuming, error::Error, Finish};
 
 #[derive(Debug)]
 pub struct ParsedNfa<'a> {
-    pub head: Vec<NfaAlphabetEntry<'a>>,
-    pub states: Vec<ParsedNfaState<'a>>,
+    pub(crate) head: Vec<NfaAlphabetEntry<'a>>,
+    pub(crate) states: Vec<ParsedNfaState<'a>>,
 }
 
 #[derive(Debug, Clone)]
-pub enum NfaAlphabetEntry<'a> {
+pub(crate) enum NfaAlphabetEntry<'a> {
     Element(&'a str),
     Eps,
 }
 
 #[derive(Debug)]
 pub struct ParsedNfaState<'a> {
-    pub name: &'a str,
-    pub initial: bool,
-    pub accepting: bool,
-    pub transitions: Vec<Vec<&'a str>>,
+    pub(crate) name: &'a str,
+    pub(crate) initial: bool,
+    pub(crate) accepting: bool,
+    pub(crate) transitions: Vec<Vec<&'a str>>,
 }
 
 #[derive(Debug)]
 pub struct ParsedDfa<'a> {
-    pub head: Vec<&'a str>,
-    pub states: Vec<ParsedDfaState<'a>>,
+    pub(crate) head: Vec<&'a str>,
+    pub(crate) states: Vec<ParsedDfaState<'a>>,
 }
 
 #[derive(Debug)]
 pub struct ParsedDfaState<'a> {
-    pub name: &'a str,
-    pub initial: bool,
-    pub accepting: bool,
-    pub transitions: Vec<&'a str>,
+    pub(crate) name: &'a str,
+    pub(crate) initial: bool,
+    pub(crate) accepting: bool,
+    pub(crate) transitions: Vec<&'a str>,
 }
 
 /// Parses a DFA according to the format above. The whole string must be parsable, otherwise this function errors.

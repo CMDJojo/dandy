@@ -1,54 +1,225 @@
-//! # Deterministic finite automaton
+//! # Deterministic Finite Automaton
 //! The DFA module includes the [Dfa] struct which represents a
 //! [Deterministic finite automaton](https://en.wikipedia.org/wiki/Deterministic_finite_automaton). Currently,
-//! the only two ways to create such an instance is by [converting a NFA to a DFA](Nfa::to_dfa) or by parsing from a
+//! the only two ways to create such an instance is by [converting a Nfa to a Dfa](Nfa::to_dfa) or by parsing from a
 //! string.
 //!
-//! ## Parsing
+//! ## Example
 //! You may parse a state transition table in text form to a DFA. The parsing is done in two steps, the first one
-//! just parsing into a [ParsedDfa](crate::parser::ParsedDfa) and the second one checking the invariant of that
-//! parsed DFA and converting it into a [Dfa]:
+//! parsing into a [ParsedDfa](crate::parser::ParsedDfa) and the second one checking the invariant of that
+//! parsed DFA and converting it into a [Dfa] with [TryInto]:
 //! ```
 //! use dandy::dfa::parse::DfaParseError;
 //! use crate::dandy::dfa::{Dfa, parse};
 //!
-//! fn parse() {
-//!     // A DFA with initial state s1, two accepting states s2 and s4,
-//!     // accepting all strings with an odd number of a:s
-//!     let input = "
-//!                a  b
-//!         ->  s1 s2 s1
-//!           * s2 s3 s1
-//!             s3 s4 s1
-//!           * s4 s1 s1
-//!     ";
-//!     // Parsing the DFA
-//!     let parsed_dfa = dandy::parser::dfa(input).unwrap();
-//!     // Checking invariants
-//!     let mut dfa: Dfa = parsed_dfa.try_into().unwrap();
-//!     assert!(dfa.accepts(&["a", "b", "b"]));  // odd number of a:s
-//!     assert!(!dfa.accepts(&["a", "a", "b"])); // even number of a:s
+//! // A DFA with initial state s1, two accepting states s2 and s4,
+//! // accepting all strings with an odd number of a:s
+//! let input = "
+//!            a  b
+//!     ->  s1 s2 s1
+//!       * s2 s3 s2
+//!         s3 s4 s3
+//!       * s4 s1 s4
+//! ";
+//! // Parsing the DFA
+//! let parsed_dfa = dandy::parser::dfa(input).unwrap();
+//! // Checking invariants
+//! let mut dfa: Dfa = parsed_dfa.try_into().unwrap();
+//! assert!(dfa.accepts_graphemes("abb"));  // odd number of a:s
+//! assert!(!dfa.accepts_graphemes("aab")); // even number of a:s
 //!
-//!     // We see that states s1 and s3 are non-distinguishable, and that states s2 and s4 are as well.
-//!     // Minimizing this DFA will thus result in a DFA with two states
-//!     dfa.minimize();
-//!     assert_eq!(dfa.states().len(), 2);
+//! // We see that states s1 and s3 are non-distinguishable, and that states s2 and s4 are as well.
+//! // Minimizing this DFA will thus result in a DFA with two states
+//! dfa.minimize();
+//! assert_eq!(dfa.states().len(), 2);
 //!
-//!     let dfa_without_initial_state = "
-//!             a b
-//!         * x y x
-//!           y x y
-//!     ";
-//!     // A DFA must have an initial state (but it doesn't have to have any accepting states),
-//!     // so the invariant should not pass
-//!     let parsed_dfa = dandy::parser::dfa(dfa_without_initial_state).unwrap();
-//!     let validation: Result<Dfa, DfaParseError<'_>> = parsed_dfa.try_into();
-//!     assert_eq!(validation.unwrap_err(), DfaParseError::MissingInitialState);
-//! }
+//! let dfa_without_initial_state = "
+//!         a b
+//!     * x y x
+//!       y x y
+//! ";
+//! // A DFA must have an initial state (but it doesn't have to have any accepting states),
+//! // so the invariant should not pass
+//! let parsed_dfa = dandy::parser::dfa(dfa_without_initial_state).unwrap();
+//! let validation: Result<Dfa, DfaParseError<'_>> = parsed_dfa.try_into();
+//! assert_eq!(validation.unwrap_err(), DfaParseError::MissingInitialState);
+//!
 //! ```
-use crate::dfa::eval::DfaEvaluator;
+//!
+//! ## Syntax
+//! The file format for DFAs is an UTF-8 encoded text file with more or less just a transition table.
+//! The first row of the file should contain all elements of the non-empty alphabet, space-separated. Then,
+//! there should be one row per state in the DFA (there must be at least one state), where each row contains
+//! these space-separated elements, in order:
+//! * Optionally `->` or `→`, if the state is the initial state
+//! * Optionally `*`, if the state is accepting
+//! * The name of the state (which may not contain whitespace)
+//! * For each element of the alphabet specified in the header, in order, what state the Dfa transitions to from the
+//!   given state upon seeing that element
+//!
+//! `ε`, `eps`, `→`, `->` and `*` are reserved and may not be used as elements of the alphabet or names of
+//! states.
+//!
+//! Additionally, these rules apply:
+//! * There must be exactly one (1) initial state
+//! * All elements of the alphabet should be specified exactly once
+//! * Unicode normalization isn't used
+//! * All transitions should exist (from every state for every element of the alphabet,
+//!   there should be a transition to a state that is defined)
+//! * Comments are started by '#', and that character and the rest of the line is not parsed
+//! * Lines just containing whitespace or comments are ignored
+//!
+//! ## Operations
+//! ### Checking word acceptance
+//! The most basic operation to do is to check if a list of elements is accepted by the automata or not.
+//! This is done by the [Dfa::accepts] function. Note that there is no restriction to how long an element of
+//! the alphabet may be. This means that the [Dfa::accepts] function takes a list of elements (i.e. a list of `&str`'s).
+//! Take the following example:
+//!
+//! ```text
+//!       a  aa
+//! -> s1 s1 s2
+//!  * s2 s1 s1
+//! ```
+//!
+//! If we would be given the input string "aaa", it is ambiguous how to break it down. However, if the alphabet of the
+//! DFA consists only of elements which are one single unicode grapheme cluster each (which can be checked by
+//! [Dfa::graphemes_only]), then the convenience function [Dfa::accepts_graphemes] can be used to take a `&str` and
+//! split it into single grapheme clusters in an unambiguous way before checking. Note that one unicode grapheme cluster
+//! may consist of multiple `char`s.
+//!
+//! Internally, a [DfaEvaluator] is constructed, which is a structure keeping track on the current state during the
+//! evaluation of a string. To create a [DfaEvaluator] to use it directly, see [Dfa::evaluator]. One can also check if
+//! it is possible to reach an accepting state with [Dfa::has_reachable_accepting_state].
+//!
+//! Example:
+//! ```
+//! use dandy::parser;
+//! use dandy::dfa::Dfa;
+//!
+//! let input = "
+//!            0   1
+//! -> even even odd
+//!  * odd  even odd
+//! ";
+//! let dfa: Dfa = parser::dfa(input).unwrap().try_into().unwrap();
+//! // The alphabet of this DFA contains single graphemes only
+//! assert!(dfa.graphemes_only());
+//! // We can assert that '001' is odd in this way...
+//! assert!(dfa.accepts(&["0", "0", "1"]));
+//! // or since "001" becomes "0", "0", "1" when split into graphemes,
+//! // we can do
+//! assert!(dfa.accepts_graphemes("001"));
+//! // We can also use the Evaluator manually:
+//! let mut evaluator = dfa.evaluator();
+//! // We step on 0 and obtain the state we went to
+//! // (This changes the state of 'evaluator')
+//! let first_state = evaluator.step("0");
+//! // This state should be the "even" state
+//! assert!(first_state.map_or(false, |s| s.name() == "even"));
+//! // We then step on '01'
+//! evaluator.step("0");
+//! evaluator.step("1");
+//! // We should be accepting this input
+//! assert!(evaluator.is_accepting());
+//! ```
+//!
+//! ### Conversions
+//! We can convert the DFA to a NFA using [Dfa::to_nfa]. Since every DFA is already a NFA, this is a
+//! cheap and straight-forward operation (but since NFAs has a set of transitions per symbol rather than just a
+//! single transition, a NFA requires `Vec`s and isn't as cheap as a DFA). Note that some features are available
+//! for NFA:s only, such as enumerating words.
+//!
+//! Additionally, a DFA can be minimized by [Dfa::minimize], which firstly removes all unreachable states, and then
+//! merges all non-distinguishable states. The minimization is unique. The algorithm involves multiple steps, some of
+//! which can be executed standalone if one would need to:
+//!
+//! [Dfa::minimize] involves:
+//! * [Removing unreachable states](Dfa::remove_unreachable_states), which depends on
+//!   * [Identifying unreachable states](Dfa::unreachable_states), and
+//!   * Removing states (not exposed)
+//! * [Merging non-distinguishable states](Dfa::merge_nondistinguishable_states), which depends on
+//!   * [Calculating equivalence classes](Dfa::state_equivalence_classes), and
+//!   * Remapping states (not exposed), and
+//!   * Removing states (not exposed)
+//!
+//! We can also invert a DFA by doing [Dfa::invert], which simply makes accepting states non-accepting and non-accepting
+//! states accepting. After inverting a DFA, it will accept all strings not previously accepted, and rejects all strings
+//! it previously accepted (assuming the strings are of the alphabet).
+//!
+//! ### Product constructions
+//! A product construction is a DFA P created from two DFAs A and B, where the states of P is the product of the states
+//! of A and B. Each pair of states `(a, b)` from A and B thus corresponds to one state in P, and on every symbol
+//! `s`, there is a transition from `(a, b)` to `(a', b')` where there is a transition from `a` to `a'` and a transition
+//! from `b` to `b'` on `s`. Thus, the product construction P behaves just as the the two DFAs A and B does, if ran
+//! simultaneous. The initial state of P  is the pair of initial states from A and B.
+//!
+//! When constructing a product construction, we have a choice on what states in P are accepted. For a state in
+//! `p = (a, b)` (which is created from one state from A and B), we can use a boolean function to map whether
+//! `a` and `b` are accepting to if the new state `p` is accepting. If we use boolean `or`, we get a DFA P which accepts
+//! all strings which are accepted either by `A` or `B` (the union of `A` and `B`), and if we use boolean `and`, we get
+//! a DFA P which accepts all strings which are accepted by both `A` and `B` (the intersection of `A` and `B`).
+//!
+//! Dandy has support for constructing a *reduced product construction*, which is a product construction only containing
+//! the pair of states which are actually reachable from the initial pair of states. This has the potential to reduce
+//! the amount of states greatly, but while this will exclude unreachable states, it will not merge non-distinguishable
+//! states. The product construction is generated by [Dfa::product_construction], and accepts a function from the
+//! pair of states `a` and `b` to if the pair of states should be an accepting state. Here is an example:
+//! ```
+//! use dandy::parser;
+//! use dandy::dfa::{Dfa, DfaState};
+//!
+//! let ends_with_a = "
+//!      a b c
+//! -> n y n n
+//!  * y y n n";
+//! let starts_with_b = "
+//!      a b c
+//! -> i n y n
+//!    n n n n
+//!  * y y y y";
+//! let ends_with_a: Dfa = parser::dfa(ends_with_a).unwrap().try_into().unwrap();
+//! let starts_with_b: Dfa = parser::dfa(starts_with_b).unwrap().try_into().unwrap();
+//!
+//! let first_not_second = |first: &DfaState, second: &DfaState| first.is_accepting() && !second.is_accepting();
+//! // 'a_not_b' accepts strings that ends with a and doesn't start with b.
+//! let a_not_b = ends_with_a.product_construction(&starts_with_b, first_not_second).unwrap();
+//! assert!(a_not_b.accepts_graphemes("aa"));
+//! assert!(!a_not_b.accepts_graphemes("ab"));
+//! assert!(!a_not_b.accepts_graphemes("ba"));
+//! assert!(!a_not_b.accepts_graphemes("bb"));
+//! ```
+//!
+//! In addition, there are four commonly used operations provided as their own convenience functions:
+//! * [Dfa::union] - Binary `or`, `A.union(&B)` accepts all strings accepted by `A` or `B` (or both)
+//! * [Dfa::intersection] - Binary `and`, `A.intersection(&B)` accepts all strings accepted by `A` and `B`
+//! * [Dfa::difference] - `A.difference(&B)` accepts all strings accepted by `A` but not by `B`
+//! * [Dfa::symmetric_difference] - Binary `xor`, `A.symmetric_difference(&B)` accepts all strings accepted by
+//!   `A` or by `B` but not by both
+//!
+//! ### Checking equivalence
+//! Two DFAs `A` and `B` are equivalent if and only if they have the same alphabet and accept the same language.
+//! There are two ways to check equivalence between two DFAs: either by running [Dfa::equivalent_to] or by
+//! checking if the symmetric difference is empty. One can check if DFA accepts any strings with
+//! [Dfa::has_reachable_accepting_state]. Testing has shown that constructing the symmetric difference instead of using
+//! [Dfa::equivalent_to] leads to a performance penalty of around 3964%, since [Dfa::equivalent_to] doesn't actually
+//! construct any new automatas.
+//!
+//! ### Additional operations
+//! In addition to the above-mentioned operations, you can:
+//! * [Get the alphabet](Dfa::alphabet) of the DFA,
+//! * [Get the states](Dfa::states) and [initial state](Dfa::initial_state) of the DFA,
+//! * [Convert it to a table](Dfa::to_table), possibly [in ascii-only](Dfa::ascii_table), both of which
+//!   can be parsed by Dandy into this very same DFA again,
+//! * Find all [reachable](Dfa::reachable_states) and [non-reachable](Dfa::unreachable_states) states,
+//! * [Clone](Dfa::clone) it, which isn't super expensive since the alphabet and state names doesn't need new
+//!   allocations to be cloned (no strings at all are actually copied, just some `vec`s with `bool`s and `usize`s)
 use crate::nfa::{Nfa, NfaState};
+pub use crate::parser::dfa as parse;
 use crate::table::Table;
+use crate::util::alphabet_equal;
+pub use eval::DfaEvaluator;
+pub use parse::DfaParseError;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
@@ -56,7 +227,10 @@ use unicode_segmentation::UnicodeSegmentation;
 pub mod eval;
 pub mod parse;
 
-/// A deterministic finite automata, denoted by its alphabet, states and the initial state
+/// A [Deterministic finite automaton](https://en.wikipedia.org/wiki/Deterministic_finite_automaton),
+/// defined by its *alphabet*, a *set of states*, one of the states being its *initial state*, a subset of its states
+/// being *final states*/*accepting states*, and a *transition function* from each state upon seeing each element of
+/// the alphabet to any state. See the [module-level documentation](crate::dfa) for more info.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dfa {
     pub(crate) alphabet: Rc<[Rc<str>]>,
@@ -121,8 +295,25 @@ impl From<Dfa> for Nfa {
 }
 
 impl Dfa {
-    /// Inverts this automata, which means that any states that were previously accepting becomes non-accepting and any
-    /// states that were previously non-accepting becomes accepting.
+    /// Inverts this automata, which makes accepting states non-accepting and non-accepting states accepting. This means
+    /// that the automata after the inversion accepts all strings not previously accepted, and rejects all strings
+    /// that were previously accepted (assuming all strings are of the alphabet)
+    ///
+    /// ```
+    /// use dandy::parser;
+    /// use dandy::dfa::Dfa;
+    ///
+    /// let contains_a = "
+    ///      a b c
+    /// -> n y n n
+    ///  * y y y y"; // Dfa accepting all strings containing "a"
+    /// let mut contains_a: Dfa = parser::dfa(contains_a).unwrap().try_into().unwrap();
+    /// assert!(contains_a.accepts_graphemes("abc"));
+    /// assert!(!contains_a.accepts_graphemes("bcb"));
+    /// contains_a.invert(); // Now "contains_a" rejects all strings containing "a"
+    /// assert!(!contains_a.accepts_graphemes("abc"));
+    /// assert!(contains_a.accepts_graphemes("bcb"));
+    /// ```
     pub fn invert(&mut self) {
         self.states
             .iter_mut()
@@ -264,13 +455,7 @@ impl Dfa {
         mut combinator: impl FnMut(&DfaState, &DfaState) -> bool,
     ) -> Option<Self> {
         //if the alphabets are different, they aren't equivalent
-        if self.alphabet.len() != other.alphabet.len() {
-            return None;
-        }
-
-        let set1 = self.alphabet.iter().collect::<HashSet<_>>();
-        let set2 = other.alphabet.iter().collect::<HashSet<_>>();
-        if set1 != set2 {
+        if !alphabet_equal(&self.alphabet, &other.alphabet) {
             return None;
         }
 
@@ -301,7 +486,7 @@ impl Dfa {
 
             state_data.push((
                 (s1.current_state_idx(), s2.current_state_idx()),
-                combinator(s1.current_state(), s2.current_state()),
+                combinator(s1.current_state().unwrap(), s2.current_state().unwrap()),
                 transition_list,
             ));
         }
@@ -366,7 +551,24 @@ impl Dfa {
         })
     }
 
-    /// Minimizes this DFA by first removing all unreachable states and then merging non-distinguishable states
+    /// Minimizes this DFA by first removing all unreachable states and then merging non-distinguishable states.
+    /// ```
+    /// use dandy::parser;
+    /// use dandy::dfa::Dfa;
+    ///
+    /// // This DFA simply accepts everything and can be minimized to just 1 state
+    /// let accepts_everything = "
+    ///        a b c
+    /// -> * y y y y
+    ///      a b c d
+    ///      b c d a
+    ///    * c a b c
+    ///      d d d c
+    /// ";
+    /// let mut dfa: Dfa = parser::dfa(accepts_everything).unwrap().try_into().unwrap();
+    /// dfa.minimize();
+    /// assert_eq!(dfa.states().len(), 1);
+    /// ```
     pub fn minimize(&mut self) {
         self.remove_unreachable_states();
         self.merge_nondistinguishable_states();
@@ -466,7 +668,7 @@ impl Dfa {
         p
     }
 
-    /// Removes the unreachable states of this automata
+    /// Removes the unreachable states of this automata, leaving only states actually reaachable by some input
     pub fn remove_unreachable_states(&mut self) {
         let states = self.unreachable_state_idx().into_iter().collect();
         self.remove_states(states);
@@ -594,6 +796,21 @@ impl Dfa {
     /// elements with multiple graphemes, those won't be recognized. To check if there are
     /// elements with multiple graphemes, see [Dfa::graphemes_only]. A grapheme is defined to be
     /// one extended unicode grapheme cluster (which may consist of one or many code points).
+    ///
+    /// ```
+    /// use dandy::parser;
+    /// use dandy::dfa::Dfa;
+    ///
+    /// let input = "
+    ///            0   1
+    /// -> even even odd
+    ///  * odd  even odd
+    /// ";
+    /// let dfa: Dfa = parser::dfa(input).unwrap().try_into().unwrap();
+    /// // The alphabet of this DFA contains single graphemes only
+    /// assert!(dfa.graphemes_only());
+    /// assert!(dfa.accepts_graphemes("001")); // Equivalent to dfa.accepts(&["0", "0", "1"])
+    /// ```
     pub fn accepts_graphemes(&self, string: &str) -> bool {
         let graphemes = string.graphemes(true).collect::<Vec<_>>();
         let mut eval = self.evaluator();
@@ -604,6 +821,27 @@ impl Dfa {
     /// Checks if the alphabet of this automaton consists of only single graphemes. If it does, one may use
     /// [Dfa::accepts_graphemes] instead of [Dfa::accepts] for improved ergonomics. A grapheme is defined to be
     /// one extended unicode grapheme cluster (which may consist of one or many code points).
+    ///
+    /// ```
+    /// use dandy::parser;
+    /// use dandy::dfa::Dfa;
+    ///
+    /// let single_graphemes = "
+    ///        a b
+    /// -> * s s s
+    /// ";
+    ///
+    /// let single_grapheme_dfa: Dfa = parser::dfa(single_graphemes).unwrap().try_into().unwrap();
+    /// assert!(single_grapheme_dfa.graphemes_only());
+    ///
+    /// let multiple_graphemes = "
+    ///        abc def
+    /// -> * s s   s
+    /// ";
+    ///
+    /// let multiple_graphemes_dfa: Dfa = parser::dfa(multiple_graphemes).unwrap().try_into().unwrap();
+    /// assert!(!multiple_graphemes_dfa.graphemes_only());
+    /// ```
     pub fn graphemes_only(&self) -> bool {
         self.alphabet
             .iter()
@@ -660,13 +898,7 @@ impl Dfa {
     // but that would lead to a slowdown of 3964%, so we keep it as is
     pub fn equivalent_to(&self, other: &Dfa) -> bool {
         //if the alphabets are different, they aren't equivalent
-        if self.alphabet.len() != other.alphabet.len() {
-            return false;
-        }
-
-        let set1 = self.alphabet.iter().collect::<HashSet<_>>();
-        let set2 = other.alphabet.iter().collect::<HashSet<_>>();
-        if set1 != set2 {
+        if !alphabet_equal(&self.alphabet, &other.alphabet) {
             return false;
         }
 

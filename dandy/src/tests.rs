@@ -121,7 +121,7 @@ proptest! {
     }
 
     #[test]
-    fn binary_dfa_ops(
+    fn dfa_binary_ops(
         dfa1 in fixed_alphabet_dfa(20, 'a'..='f', ('a'..='f').count()),
         dfa2 in fixed_alphabet_dfa(20, 'a'..='f', ('a'..='f').count()),
         tests in prop::collection::vec("[a-f]+", 100)
@@ -137,6 +137,23 @@ proptest! {
             assert_eq!(union.accepts_graphemes(test), r1 || r2);
             assert_eq!(difference.accepts_graphemes(test), r1 && !r2);
             assert_eq!(symmetric_difference.accepts_graphemes(test), r1 != r2);
+        }
+    }
+
+    #[test]
+    fn nfa_binary_ops(
+        // This takes a really long time to run, so we reduce the size of NFAs tested and amount of test cases
+        nfa1 in fixed_alphabet_nfa(8, 'a'..='f', ('a'..='f').count()),
+        nfa2 in fixed_alphabet_nfa(8, 'a'..='f', ('a'..='f').count()),
+        tests in prop::collection::vec("[a-f]+", 50)
+    ) {
+        let intersection = nfa1.intersection(&nfa2).unwrap();
+        let union = nfa1.clone().union(nfa2.clone()).unwrap();
+        for test in tests.iter() {
+            let r1 = nfa1.accepts_graphemes(test);
+            let r2 = nfa2.accepts_graphemes(test);
+            assert_eq!(intersection.accepts_graphemes(test), r1 && r2);
+            assert_eq!(union.accepts_graphemes(test), r1 || r2);
         }
     }
 
@@ -183,6 +200,15 @@ proptest! {
         assert!(nfa.equivalent_to(&no_eps));
         assert!(no_eps.states().iter().all(|s| s.epsilon_transitions.is_empty()));
         assert!(!no_eps.has_epsilon_moves());
+    }
+
+    #[test]
+    fn nfa_remove_unreachable_states(
+        nfa in nfa(25, 25)
+    ) {
+        let mut no_unr_states = nfa.clone();
+        no_unr_states.remove_unreachable_states();
+        assert!(nfa.equivalent_to(&no_unr_states));
     }
 
     #[test]
@@ -259,6 +285,45 @@ proptest! {
         let stringified = parse1.to_string();
         let parse2 = parser::regex(&stringified).unwrap();
         assert!(parse1.to_nfa().equivalent_to(&parse2.to_nfa()));
+    }
+}
+
+prop_compose! {
+    fn fixed_alphabet_nfa(max_states: usize, alphabet: RangeInclusive<char>, alphabet_size: usize)
+        (num_states in 1..max_states)
+        (
+            states in state_names(num_states),
+            initial_state in 0..num_states,
+            accepting_states in prop::collection::vec(any::<bool>(), num_states..=num_states),
+            transitions in prop::collection::vec(nfa_transitions(num_states, alphabet_size), num_states..=num_states),
+            epsilon_transitions in prop::collection::vec(epsilon_transitions(num_states), num_states..=num_states),
+        )
+    -> Nfa {
+        let states = states.into_iter().zip(
+            accepting_states.into_iter().zip(
+                transitions.into_iter().zip(
+                    epsilon_transitions.into_iter()
+                )
+            )
+        ).enumerate().map(|(idx, (state_name, (accepting, (transitions, epsilon_transitions))))|
+            NfaState {
+                name: Rc::from(state_name.as_str()),
+                initial: idx == initial_state,
+                accepting,
+                transitions,
+                epsilon_transitions
+            }
+        ).collect();
+
+        let mut alphabet: Vec<Rc<str>> = alphabet.clone().map(|c| Rc::from(c.to_string())).collect();
+        alphabet.shuffle(&mut thread_rng());
+        let alphabet = Rc::from(alphabet);
+
+        Nfa {
+            alphabet,
+            states,
+            initial_state
+        }
     }
 }
 
